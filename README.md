@@ -14,7 +14,6 @@
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Kiến trúc chi tiết, data flow, mô tả từng file |
 | [docs/USAGE.md](docs/USAGE.md) | Hướng dẫn cài đặt và chạy pipeline |
 | [docs/VALIDATION.md](docs/VALIDATION.md) | Quy tắc validation, ví dụ, poison pill |
-| [docs/QUICKSTART.md](docs/QUICKSTART.md) | Quick start cho người mới |
 
 ---
 
