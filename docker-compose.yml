@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    container_name: smartcity-ingest-validate
+    environment:
+      - MQTT_HOST=dathoc.net
+      - MQTT_PORT=443
+      - MQTT_USERNAME=test1
+      - MQTT_PASSWORD=123456
+    command:
+      - "--host=dathoc.net"
+      - "--port=443"
+      - "--ws-path=/mq"
+      - "--username=test1"
+      - "--password=123456"
+      - "--topic=qa-smartcity/#"
+      - "--duration=1200"
+      - "--insecure"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
