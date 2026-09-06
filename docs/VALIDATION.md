@@ -1,368 +1,305 @@
-# Validation Rules — SmartCity IoT Pipeline
+# Validation Rules — SmartCity IoT Pipeline (Multi-Source)
 
 ## Tổng Quan
 
-Pipeline sử dụng Pydantic để validate dữ liệu theo 2 bước:
-1. **Schema Check:** Kiểm tra field bắt buộc và kiểu dữ liệu
-2. **Range Check:** Kiểm tra giá trị vật lý hợp lệ
+Pipeline sử dụng Pydantic v2 để validate dữ liệu theo 2 bước:
+1. **Schema Check:** Kiểm tra field bắt buộc và kiểu dữ liệu (`UnifiedTelemetry`)
+2. **Range Check:** Kiểm tra ngưỡng vật lý + ngưỡng nghiệp vụ
+
+Schema thống nhất cho **tất cả 3 khu CN** (A, B, C) và **tất cả group** (electricity, water, lighting).
+
+---
+
+## Schema: UnifiedTelemetry
+
+```python
+class UnifiedTelemetry(BaseModel):
+    """Schema thống nhất cho multi-source ingestion"""
+
+    # Identity
+    dev_id: str = Field(..., description="Device ID")
+
+    # Timestamp
+    ts: str = Field(..., description="Timestamp ISO format")
+    tsunix: int = Field(..., description="Timestamp Unix epoch seconds")
+
+    # Electrical measurements
+    U: float = Field(..., ge=0, le=500, description="Voltage (V)")
+    I: float = Field(..., ge=0, le=1000, description="Current (A)")
+    Power_kW: float = Field(..., ge=0, le=1000, description="Power (kW)")
+    Energy_kwh: float = Field(..., ge=0, description="Energy (kWh)")
+
+    # Alarms
+    Alr_Current: int = Field(..., ge=0, le=1, description="Alarm Current (0/1)")
+    Alr_Volt: int = Field(..., ge=0, le=1, description="Alarm Voltage (0/1)")
+
+    # Mode & Lines
+    Mode_c: int = Field(..., ge=0, le=2, description="Mode (0/1/2)")
+    Line_8: int = Field(..., ge=0, le=1, alias="Line 8")
+    Line_9: int = Field(..., ge=0, le=1, alias="Line 9")
+    Line_10: int = Field(..., ge=0, le=1, alias="Line 10")
+
+    # Optional nested objects
+    Lux: Optional[Lux] = None
+    Contactor: Optional[Contactor] = None
+
+    # Multi-source fields
+    khu_cn: str = Field(..., description="Khu công nghiệp: A, B, C")
+    source_name: str = Field(..., description="Tên nguồn: CN_A, CN_B, CN_C")
+    received_at: int = Field(default_factory=lambda: int(time.time()))
+
+    class Config:
+        populate_by_name = True
+        extra = "allow"
+
+
+class Lux(BaseModel):
+    """Độ sáng các kênh"""
+    _1: Optional[float] = Field(None, alias="1")
+    _2: Optional[float] = Field(None, alias="2")
+
+    class Config:
+        populate_by_name = True
+        extra = "allow"
+
+
+class Contactor(BaseModel):
+    """Trạng thái contactor"""
+    _1: Optional[int] = Field(None, alias="1")
+    _2: Optional[int] = Field(None, alias="2")
+
+    class Config:
+        populate_by_name = True
+        extra = "allow"
+```
 
 ---
 
 ## Bước 1: Schema Check
 
-### EventEnvelope (Mọi thiết bị)
-
-```python
-class EventEnvelope(BaseModel):
-    event_id: str                    # Bắt buộc
-    schema_version: str              # Bắt buộc
-    source: str                      # Bắt buộc
-    device_id: str                   # Bắt buộc
-    device_type: str                 # Bắt buộc
-    group: str                       # Bắt buộc: water/electricity/light
-    location_id: str                 # Bắt buộc
-    ts: int                          # Bắt buộc: Epoch milliseconds
-    ts_iso: str                      # Bắt buộc
-    local_hour: float                # Bắt buộc
-    seq: int                         # Bắt buộc
-    use_case: str                    # Bắt buộc
-    alerts: List[Any] = []           # Không bắt buộc, default: []
-    metrics: Dict[str, Any]          # Bắt buộc
-    quality: Quality                 # Bắt buộc
-```
-
-### Quality
-
-```python
-class Quality(BaseModel):
-    rssi_dbm: float                  # Bắt buộc
-    snr_db: float                    # Bắt buộc
-    latency_ms: float = Field(ge=0)  # Bắt buộc, ≥ 0
-```
+Validate toàn bộ payload với `UnifiedTelemetry` (Pydantic v2).
 
 ### Lỗi Schema
 
 | Lỗi | Mô tả | Ví dụ |
 |------|-------|-------|
-| `missing` | Thiếu field bắt buộc | Thiếu `device_id` |
-| `type_error` | Sai kiểu dữ liệu | `ts` là string thay vì int |
-| `value_error` | Giá trị không hợp lệ | `latency_ms` < 0 |
+| `missing` | Thiếu field bắt buộc | Thiếu `dev_id`, `ts`, `U` |
+| `type_error` | Sai kiểu dữ liệu | `U` là string thay vì float |
+| `value_error` | Giá trị không hợp lệ | `U` = -10 (vi phạm `ge=0`) |
 
-**Log mẫu:**
+**Log mẫu schema_error:**
 ```json
 {
   "error_type": "schema_error",
-  "error_detail": "[{'type': 'missing', 'loc': ('device_id',), 'msg': 'Field required'}]",
+  "error_detail": "[{'type': 'missing', 'loc': ('dev_id',), 'msg': 'Field required'}]",
   "device_id": null,
-  "group": null
+  "khu_cn": "A"
 }
 ```
 
 ---
 
-## Bước 2: Range Check
+## Bước 2: Range Check (Ngưỡng Nghiệp Vụ)
 
-### WaterMetrics
+Kiểm tra ngưỡng nghiệp vụ theo **group** (xác định từ fields có trong payload).
 
-```python
-class WaterMetrics(BaseModel):
-    flow_m3_h: float = Field(ge=0, le=1000)           # 0-1000 m³/h
-    pressure_bar: float = Field(ge=0, le=50)           # 0-50 bar
-    cumulative_m3: float = Field(ge=0)                 # ≥ 0
-    turbidity_ntu: float = Field(ge=0)                 # ≥ 0
-    residual_chlorine_mg_l: float = Field(ge=0)        # ≥ 0
-    ph: float = Field(ge=0, le=14)                     # 0-14
-    conductivity_us_cm: float = Field(ge=0)            # ≥ 0
-    temperature_c: float = Field(ge=-10, le=60)        # -10~60°C
-    status: str                                         # Bắt buộc
+### Electricity Group
+
+| Field | Min | Max | Đơn vị | Mô tả |
+|-------|-----|-----|--------|-------|
+| `U` | 180 | 250 | V | Điện áp |
+| `I` | 0 | 100 | A | Dòng điện |
+| `Power_kW` | 0 | 50 | kW | Công suất |
+| `Energy_kwh` | 0 | 100000 | kWh | Năng lượng tích lũy |
+
+### Water Group
+
+| Field | Min | Max | Đơn vị | Mô tả |
+|-------|-----|-----|--------|-------|
+| `flow_m3_h` | 0 | 100 | m³/h | Lưu lượng |
+| `pressure_bar` | 0 | 10 | bar | Áp suất |
+| `ph` | 6.5 | 8.5 | - | Độ pH |
+| `turbidity_ntu` | 0 | 5 | NTU | Độ đục |
+
+### Lighting Group
+
+| Field | Min | Max | Đơn vị | Mô tả |
+|-------|-----|-----|--------|-------|
+| `Power_kW` | 0 | 10 | kW | Công suất đèn |
+| `Lux.1` | 0 | 10000 | lux | Độ sáng kênh 1 |
+| `Lux.2` | 0 | 10000 | lux | Độ sáng kênh 2 |
+
+### Alarms & Status (All Groups)
+
+| Field | Min | Max | Mô tả |
+|-------|-----|-----|-------|
+| `Alr_Current` | 0 | 1 | Cảnh báo dòng điện |
+| `Alr_Volt` | 0 | 1 | Cảnh báo điện áp |
+| `Mode_c` | 0 | 2 | Chế độ hoạt động |
+| `Line_8` | 0 | 1 | Trạng thái line 8 |
+| `Line_9` | 0 | 1 | Trạng thái line 9 |
+| `Line_10` | 0 | 1 | Trạng thái line 10 |
+
+### Nested Objects
+
+**Lux:**
+```json
+{
+  "Lux": {
+    "1": 36.0,
+    "2": 38.0
+  }
+}
 ```
+Mỗi kênh: `0 - 10000 lux`
 
-**Range Chi Tiết:**
-
-| Field | Min | Max | Đơn vị | Ghi chú |
-|-------|-----|-----|--------|---------|
-| `flow_m3_h` | 0 | 1000 | m³/h | Lưu lượng |
-| `pressure_bar` | 0 | 50 | bar | Áp suất |
-| `cumulative_m3` | 0 | ∞ | m³ | Tổng lưu lượng |
-| `turbidity_ntu` | 0 | ∞ | NTU | Độ đục |
-| `residual_chlorine_mg_l` | 0 | ∞ | mg/L | Clo dư |
-| `ph` | 0 | 14 | - | Độ pH |
-| `conductivity_us_cm` | 0 | ∞ | µS/cm | Độ dẫn điện |
-| `temperature_c` | -10 | 60 | °C | Nhiệt độ |
-
-### GenericMetrics (Electricity/Light)
-
-```python
-class GenericMetrics(BaseModel):
-    status: Optional[str] = None
-
-    class Config:
-        extra = "allow"  # Cho phép thêm field tùy ý
+**Contactor:**
+```json
+{
+  "Contactor": {
+    "1": 1,
+    "2": 0
+  }
+}
 ```
+Trạng thái: `0` (mở) / `1` (đóng)
 
-**Hiện tại chỉ kiểm tra:**
-- Có field `status` không
-- Các field còn lại là số hợp lệ (không NaN/None sai kiểu)
+---
 
-**TODO:** Bổ sung khi có sample thật từ electricity/light
-
-### Lỗi Range
+## Lỗi Range
 
 | Lỗi | Mô tả | Ví dụ |
 |------|-------|-------|
-| `greater_than` | Giá trị nhỏ hơn min | `ph = -1` |
-| `less_than` | Giá trị lớn hơn max | `ph = 15` |
-| `greater_than_equal` | Giá trị nhỏ hơn min | `flow_m3_h = -0.1` |
+| `value_error` | Giá trị ngoài range | `U` = 300 (vượt 250V) |
+| `value_error` | Giá trị âm | `I` = -5A |
+| `value_error` | pH ngoài range | `ph` = 5.0 |
 
-**Log mẫu:**
+**Log mẫu range_error:**
 ```json
 {
   "error_type": "range_error",
-  "error_detail": "[{'type': 'greater_than', 'loc': ('ph',), 'msg': 'Input should be greater than or equal to 0', 'input': -1}]",
-  "device_id": "device-001",
-  "group": "water"
+  "error_detail": "[{'type': 'value_error', 'loc': ('U',), 'msg': 'Value error, Input should be less than or equal to 250', 'input': 300}]",
+  "device_id": "SL-AREA-556",
+  "khu_cn": "A"
 }
 ```
 
 ---
 
-## Poison Pill Detection
+## Poison Pill Handling
 
-### Logic
+**Logic:** Device gửi message lỗi (schema_error HOẶC range_error) **liên tục ≥3 lần** → coi là "poison pill".
 
-- Nếu 1 device lỗi liên tục ≥ **3 lần** → đẩy sang `dead_letter.jsonl`
-- Reset counter khi device gửi message hợp lệ
+**Xử lý:**
+1. Ghi message gốc vào `logs/dead_letter.jsonl`
+2. Reset counter sau khi device gửi message **hợp lệ** (valid)
+3. Không block pipeline, chỉ log và tiếp tục
 
-### Code
-
-```python
-RETRY_LIMIT = 3
-
-def process_one(self, topic: str, payload: dict):
-    result = validate_event(payload)
-
-    if result.is_valid:
-        # Reset streak lỗi của device này
-        if result.device_id:
-            self._error_streak_by_device[result.device_id] = 0
-    else:
-        # Tăng streak lỗi
-        if result.device_id:
-            self._error_streak_by_device[result.device_id] += 1
-            if self._error_streak_by_device[result.device_id] >= self.RETRY_LIMIT:
-                self._dead_letter_file.write(json.dumps(payload) + "\n")
-                self._error_streak_by_device[result.device_id] = 0
-```
-
-### Output
-
-**`logs/dead_letter.jsonl`:**
+**Log mẫu dead_letter:**
 ```json
 {
-  "event_id": "...",
-  "device_id": "device-001",
-  "group": "water",
+  "dev_id": "SL-AREA-556",
+  "khu_cn": "A",
+  "ts": "2026-09-07T10:00:00",
+  "tsunix": 1788694281,
+  "U": 300,
   "...": "..."
 }
 ```
 
 ---
 
-## Hàm Validate Chính
-
-```python
-def validate_event(raw: dict) -> ValidationResult:
-    # Bước 1: kiểm tra envelope (field bắt buộc, kiểu dữ liệu)
-    try:
-        envelope = EventEnvelope(**raw)
-    except ValidationError as e:
-        return ValidationResult(
-            is_valid=False,
-            error_type="schema_error",
-            error_detail=str(e.errors()[:2]),
-            device_id=raw.get("device_id"),
-            group=raw.get("group"),
-        )
-
-    # Bước 2: kiểm tra range vật lý theo group
-    metrics_model = METRICS_MODEL_BY_GROUP.get(envelope.group, GenericMetrics)
-    try:
-        metrics_model(**envelope.metrics)
-    except ValidationError as e:
-        return ValidationResult(
-            is_valid=False,
-            error_type="range_error",
-            error_detail=str(e.errors()[:2]),
-            device_id=envelope.device_id,
-            group=envelope.group,
-        )
-
-    return ValidationResult(
-        is_valid=True,
-        device_id=envelope.device_id,
-        group=envelope.group,
-    )
-```
-
----
-
-## Kết Quả Validate
+## Kết Quả Validation
 
 ```python
 class ValidationResult(BaseModel):
     is_valid: bool
-    error_type: Optional[str] = None   # "schema_error" | "range_error"
+    error_type: Optional[str] = None    # "schema_error" | "range_error"
     error_detail: Optional[str] = None
     device_id: Optional[str] = None
-    group: Optional[str] = None
+    khu_cn: Optional[str] = None
 ```
+
+**Valid:** `is_valid=true` → Push đến Detect Queue
+**Invalid:** `is_valid=false` → Ghi `invalid_events.jsonl` + Poison Pill check
 
 ---
 
-## Ví Dụ Validate
+## Ví Dụ Payload Hợp Lệ
 
-### Ví Dụ 1: Message Hợp Lệ
-
-**Input:**
 ```json
 {
-  "event_id": "evt-001",
-  "schema_version": "1.0",
-  "source": "sensor",
-  "device_id": "device-001",
-  "device_type": "water_sensor",
-  "group": "water",
-  "location_id": "loc-001",
-  "ts": 1693843200000,
-  "ts_iso": "2026-09-04T14:00:00Z",
-  "local_hour": 14.0,
-  "seq": 1,
-  "use_case": "monitoring",
-  "alerts": [],
-  "metrics": {
-    "flow_m3_h": 10.5,
-    "pressure_bar": 2.5,
-    "cumulative_m3": 1000.0,
-    "turbidity_ntu": 0.5,
-    "residual_chlorine_mg_l": 0.2,
-    "ph": 7.0,
-    "conductivity_us_cm": 500.0,
-    "temperature_c": 25.0,
-    "status": "normal"
-  },
-  "quality": {
-    "rssi_dbm": -60.0,
-    "snr_db": 15.0,
-    "latency_ms": 50.0
-  }
-}
-```
-
-**Output:**
-```json
-{
-  "is_valid": true,
-  "device_id": "device-001",
-  "group": "water"
-}
-```
-
-### Ví Dụ 2: Thiếu Field (Schema Error)
-
-**Input:**
-```json
-{
-  "event_id": "evt-002",
-  "schema_version": "1.0",
-  "source": "sensor",
-  "device_id": "device-002",
-  "device_type": "water_sensor",
-  "group": "water",
-  "location_id": "loc-001",
-  "ts": 1693843200000,
-  "ts_iso": "2026-09-04T14:00:00Z",
-  "local_hour": 14.0,
-  "seq": 2,
-  "use_case": "monitoring",
-  "alerts": [],
-  "metrics": {
-    "flow_m3_h": 10.5,
-    "pressure_bar": 2.5,
-    "cumulative_m3": 1000.0,
-    "turbidity_ntu": 0.5,
-    "residual_chlorine_mg_l": 0.2,
-    "ph": 7.0,
-    "conductivity_us_cm": 500.0,
-    "temperature_c": 25.0,
-    "status": "normal"
-  }
-}
-```
-
-**Output:**
-```json
-{
-  "is_valid": false,
-  "error_type": "schema_error",
-  "error_detail": "[{'type': 'missing', 'loc': ('quality',), 'msg': 'Field required'}]",
-  "device_id": "device-002",
-  "group": "water"
-}
-```
-
-### Ví Dụ 3: Giá Trị Ngoài Range (Range Error)
-
-**Input:**
-```json
-{
-  "event_id": "evt-003",
-  "schema_version": "1.0",
-  "source": "sensor",
-  "device_id": "device-003",
-  "device_type": "water_sensor",
-  "group": "water",
-  "location_id": "loc-001",
-  "ts": 1693843200000,
-  "ts_iso": "2026-09-04T14:00:00Z",
-  "local_hour": 14.0,
-  "seq": 3,
-  "use_case": "monitoring",
-  "alerts": [],
-  "metrics": {
-    "flow_m3_h": 10.5,
-    "pressure_bar": 2.5,
-    "cumulative_m3": 1000.0,
-    "turbidity_ntu": 0.5,
-    "residual_chlorine_mg_l": 0.2,
-    "ph": 15.0,
-    "conductivity_us_cm": 500.0,
-    "temperature_c": 25.0,
-    "status": "normal"
-  },
-  "quality": {
-    "rssi_dbm": -60.0,
-    "snr_db": 15.0,
-    "latency_ms": 50.0
-  }
-}
-```
-
-**Output:**
-```json
-{
-  "is_valid": false,
-  "error_type": "range_error",
-  "error_detail": "[{'type': 'less_than_equal', 'loc': ('ph',), 'msg': 'Input should be less than or equal to 14', 'input': 15.0}]",
-  "device_id": "device-003",
-  "group": "water"
+  "dev_id": "SL-AREA-556",
+  "ts": "2026-09-07T10:30:00",
+  "tsunix": 1788789000,
+  "U": 220.5,
+  "I": 12.4,
+  "Power_kW": 2.71,
+  "Energy_kwh": 2969.0,
+  "Alr_Current": 0,
+  "Alr_Volt": 0,
+  "Mode_c": 1,
+  "Line 8": 1,
+  "Line 9": 0,
+  "Line 10": 1,
+  "Lux": {"1": 36.0, "2": 38.0},
+  "Contactor": {"1": 1, "2": 0},
+  "khu_cn": "A",
+  "source_name": "CN_A",
+  "received_at": 1788789000
 }
 ```
 
 ---
 
-## Lưu Ý
+## Ví Dụ Payload Sai (Schema Error)
 
-1. **Không raise exception:** `validate_event()` trả về `ValidationResult`, không raise exception ra ngoài
-2. **Poison pill:** Device lỗi liên tục ≥3 lần → đẩy sang dead letter
-3. **Range vật lý:** Chỉ kiểm tra giá trị "vật lý không thể xảy ra", không phải ngưỡng nghiệp vụ
-4. **TODO:** Bổ sung `ElectricityMetrics` và `LightMetrics` khi có sample thật
+```json
+{
+  "dev_id": "SL-AREA-556",
+  "ts": "2026-09-07T10:30:00",
+  "tsunix": 1788789000,
+  "U": "invalid",          // Sai kiểu: string thay vì float
+  "I": 12.4,
+  "khu_cn": "A"            // Thiếu các field bắt buộc khác
+}
+```
+
+**Kết quả:** `schema_error` - missing fields + type error
+
+---
+
+## Ví Dụ Payload Sai (Range Error)
+
+```json
+{
+  "dev_id": "SL-AREA-556",
+  "ts": "2026-09-07T10:30:00",
+  "tsunix": 1788789000,
+  "U": 300.0,              // Vượt max 250V
+  "I": 12.4,
+  "Power_kW": 2.71,
+  "Energy_kwh": 2969.0,
+  "Alr_Current": 0,
+  "Alr_Volt": 0,
+  "Mode_c": 1,
+  "Line 8": 1,
+  "Line 9": 0,
+  "Line 10": 1,
+  "khu_cn": "A",
+  "source_name": "CN_A",
+  "received_at": 1788789000
+}
+```
+
+**Kết quả:** `range_error` - `U` vượt ngưỡng 250V
+
+---
+
+## Implementation Notes
+
+- **File:** `src/schemas.py` - chứa `UnifiedTelemetry`, `Lux`, `Contactor`, `validate_event()`
+- **File:** `src/validate.py` - `Validator` class, poison pill logic
+- **Validation function:** `validate_event(raw: dict, schema_class=UnifiedTelemetry) -> ValidationResult`
+- **Poison pill limit:** 3 liên tiếp (configurable via `RETRY_LIMIT`)
+- **Extra fields:** `extra = "allow"` cho phép fields mở rộng trong tương lai
