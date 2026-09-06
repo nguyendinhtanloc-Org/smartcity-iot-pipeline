@@ -1,43 +1,56 @@
-# Kiến Trúc Dự Án — SmartCity IoT Pipeline
+# Kiến Trúc Dự Án — SmartCity IoT Pipeline (Multi-Source)
 
 ## Tổng Quan
 
-Pipeline xử lý dữ liệu IoT thời gian thực từ các cảm biến điện/nước/ánh sáng trong hệ thống SmartCity. Dữ liệu được thu nhận qua MQTT, validate theo schema và range vật lý, sau đó lưu trữ để phân tích tiếp.
+Pipeline xử lý dữ liệu IoT thời gian thực từ **3 khu công nghiệp** (A, B, C) thông qua **multi-threaded ingestion** từ MQTT WSS, validate dữ liệu theo schema thống nhất, phát hiện vi phạm ngưỡng nghiệp vụ, gửi cảnh báo và lưu trữ vào PostgreSQL.
 
 ---
 
 ## Kiến Trúc Hệ Thống
 
 ```
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│  CN A       │  │  CN B       │  │  CN C       │
+│  (mqtt1)    │  │  (mqtt2)    │  │  (mqtt3)    │
+│  v1/C001/+/ │  │  v1/C002/+/ │  │  v1/C003/+/ │
+│  up/telemetry   up/telemetry   up/telemetry   │
+└──────┬──────┘  └──────┬──────┘  └──────┬──────┘
+       │                │                │
+       ▼                ▼                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    MQTT Broker (dathoc.net:443)             │
-│                    Topic: v1/C001/+/up/telemetry                    │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ WebSocket Secure (WSS)
-                           ▼
+│              MULTI-SOURCE INGESTION (Multi-thread)          │
+│  3 MQTT Workers (Thread) → Unified Queue + khu_cn, source  │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     BASELINE (baseline.py)                  │
-│              Đo tốc độ thực tế trước khi chạy              │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
+│                     VALIDATION                              │
+│  Schema (Pydantic UnifiedTelemetry) + Range Check          │
+│  Poison Pill: device lỗi ≥3 lần → dead_letter               │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  main.py (Entry Point)                      │
-│                                                             │
-│  ┌──────────────────────┐    ┌──────────────────────┐      │
-│  │   INGESTION          │    │   VALIDATION          │      │
-│  │   (ingest.py)        │    │   (validate_stage.py) │      │
-│  │                      │    │                       │      │
-│  │  • MQTT subscribe    │───▶│  • Schema check       │      │
-│  │  • Parse JSON        │    │  • Range validation   │      │
-│  │  • Push to queue     │    │  • Poison pill detect │      │
-│  │  • Write raw .jsonl  │    │  • Write invalid logs │      │
-│  │  • Log throughput    │    │  • Log statistics     │      │
-│  └──────────┬───────────┘    └──────────┬────────────┘      │
-│             │                           │                   │
-│             ▼                           ▼                   │
-│  data/raw/raw_events_*.jsonl   logs/invalid_events.jsonl   │
-│                                logs/dead_letter.jsonl       │
+│                     DETECT                                  │
+│  Rule-based Threshold + 3-Strike Violation Counter         │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     ALERT                                   │
+│  3-Strike Violation → Telegram Bot / SMTP Email            │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     STORAGE (PostgreSQL)                    │
+│  raw_events | violations | alerts  (Batch Insert)          │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     DAILY REPORT                            │
+│  Group by khu_cn/device/group → Telegram/Email/JSON        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -45,65 +58,136 @@ Pipeline xử lý dữ liệu IoT thời gian thực từ các cảm biến đi�
 
 ## Luồng Dữ Liệu (Data Flow)
 
-### 1. Thu Nhận (Ingestion)
+### 1. Multi-Source Ingestion (ingest.py)
 
 ```
-MQTT Message
+MQTT Message (CN A/B/C)
     │
     ▼
-Parse JSON ──(Lỗi)──▶ Ghi raw với _raw_unparsed
+3 Thread Workers (paho-mqtt WSS)
     │
     ▼
-Đẩy vào Queue (bounded, maxsize=20000)
+Parse JSON → Enrich (+khu_cn, source_name, received_at)
     │
     ▼
-Ghi raw file .jsonl (dùng cho replay)
+Unified Queue (thread-safe, bounded)
+    │
+    ▼
+Log throughput per source (10s window)
 ```
 
 **Chi tiết:**
-- Kết nối WSS (TLS, force IPv4)
-- Subscribe topic `v1/C001/+/up/telemetry`
-- Nhận message → parse JSON → push vào `queue.Queue`
-- Ghi raw message xuống `data/raw/raw_events_<timestamp>.jsonl`
-- Log throughput mỗi 10 giây
-- Xử lý reconnect tự động khi MQTT rớt
+- 3 Thread Workers, mỗi thread connect 1 MQTT source (CN A, B, C)
+- Topic: `v1/C001/+/up/telemetry`, `v1/C002/+/up/telemetry`, `v1/C003/+/up/telemetry`
+- Parse JSON → Enrich payload: `+khu_cn, +source_name, +received_at`
+- Push vào Unified Queue (bounded, maxsize=20000)
+- Log throughput per source mỗi 10 giây
+- Auto-reconnect khi MQTT rớt (configurable delay)
 
-### 2. Xác Thực (Validation)
+---
+
+### 2. Validation (validate.py)
 
 ```
 Queue Item (topic, payload)
     │
     ▼
-Schema Check (Pydantic)
+Schema Check (Pydantic UnifiedTelemetry)
     │
-    ├──(Lỗi schema)──▶ error_type="schema_error"
-    │                   Ghi vào invalid_events.jsonl
-    │
-    ▼
-Range Check (theo device_type)
-    │
-    ├──(Lỗi range)───▶ error_type="range_error"
-    │                   Ghi vào invalid_events.jsonl
+    ├──(Schema Error)──▶ error_type="schema_error"
+    │                    Ghi invalid_events.jsonl
     │
     ▼
-Valid Message ──▶ Chuyển sang Detect (giai đoạn sau)
+Valid Message ──▶ Detect Queue
 ```
 
-**Logic xử lý:**
+**Logic Validation:**
+1. **Schema Check:** Validate với `UnifiedTelemetry` (Pydantic v2)
+   - Required fields: `dev_id`, `ts`, `tsunix`, `U`, `I`, `Power_kW`, `Energy_kwh`, `Alr_Current`, `Alr_Volt`, `Mode_c`, `Line 8/9/10`, `khu_cn`, `source_name`
+   - Optional: `Lux`, `Contactor`
+2. **Range Check:** Kiểm tra ngưỡng vật lý (voltage 180-250V, current 0-100A, power 0-50kW, etc.)
+3. **Poison Pill:** Device lỗi liên tục ≥3 lần → ghi `dead_letter.jsonl`
 
-1. **Bước 1 — Schema Check:**
-   - Kiểm tra field bắt buộc: `event_id`, `device_id`, `ts`, `metrics`, `quality`
-   - Kiểm tra kiểu dữ liệu (string, int, dict)
-   - Sử dụng Pydantic `ValidationError` để bắt lỗi
+---
 
-2. **Bước 2 — Range Check:**
-   - Kiểm tra giá trị vật lý theo từng nhóm thiết bị
-   - **Water:** pH 0-14, pressure 0-50 bar, flow ≥ 0, temperature -10~60°C
-   - **Electricity/Light:** Sử dụng `GenericMetrics` (TODO khi có sample)
+### 3. Detection (detect.py)
 
-3. **Poison Pill Handling:**
-   - Device nào lỗi liên tục ≥3 lần → đẩy sang `dead_letter.jsonl`
-   - Reset counter khi device gửi message hợp lệ
+```
+Valid Message
+    │
+    ▼
+Threshold Check (theo group: electricity/water/lighting)
+    │
+    ├──(Violation)──▶ Violation streak++
+    │                    │
+    │                    ├── streak ≥ 3 → Alert Queue + Alert triggered
+    │                    │
+    │                    ▼
+    │               Reset streak = 0 (khi normal)
+    │
+    ▼
+Pass to Alert Queue
+```
+
+**Logic Detect:**
+- **Threshold Rules:** Ngưỡng nghiệp vụ theo group (electricity: U 180-250V, I 0-100A, Power 0-50kW; Water: flow 0-100, pressure 0-10, pH 6.5-8.5; Lighting: Power 0-10kW, Lux 0-10000)
+- **3-Strike Rule:** Device vi phạm ≥3 lần liên tiếp → trigger Alert
+- **State Management:** Track `violation_streak`, `total_violations` per device per khu_cn
+
+---
+
+### 4. Alert (alert.py)
+
+```
+Alert Item (3-strike violation)
+    │
+    ▼
+Format Message (Markdown)
+    │
+    ├──▶ Telegram Bot API (multi chat_id)
+    │
+    ├──▶ SMTP Email (multi recipient)
+    │
+    ▼
+Pass to Storage Queue
+```
+
+---
+
+### 5. Storage (storage.py)
+
+```
+Queue Items (events + alerts)
+    │
+    ▼
+Buffer (batch_size=100, flush_interval=5s)
+    │
+    ▼
+PostgreSQL Batch Insert
+    ├── raw_events (dev_id, khu_cn, payload JSONB)
+    ├── violations (dev_id, khu_cn, field, value, min/max, streak)
+    └── alerts (alert_type, dev_id, khu_cn, streak, payload)
+```
+
+---
+
+### 6. Daily Report (daily_report.py)
+
+```
+Schedule: 00:00 hàng ngày
+    │
+    ▼
+Query PostgreSQL (raw_events, violations, alerts)
+    │
+    ▼
+Aggregate: total_events, violations_by_group/khu_cn, top_devices, 3-strike_alerts
+    │
+    ▼
+Generate: JSON file + Telegram Markdown + Email HTML
+    │
+    ▼
+Send notifications
+```
 
 ---
 
@@ -111,267 +195,105 @@ Valid Message ──▶ Chuyển sang Detect (giai đoạn sau)
 
 ```
 smartcity-iot-pipeline/
-├── main.py              # Entry point — chạy LIVE
-├── baseline.py          # Đo baseline — tốc độ từ broker
-├── ingest.py            # Chặng Ingestion
-├── validate_stage.py    # Chặng Validation
-├── schemas.py           # Pydantic schema + range validation
-├── replay.py            # Test replay data local
-├── mor_payload.py       # Script monitor từ mentor
+├── config/
+│   └── sources.yaml          # Config 3 nguồn MQTT (CN A, B, C)
+├── src/
+│   ├── __init__.py
+│   ├── ingest.py             # MultiSourceIngestor (multi-thread)
+│   ├── validate.py           # Validate (Pydantic + range + poison pill)
+│   ├── detect.py             # Detect violations (threshold + 3-strike)
+│   ├── alert.py              # Alert (Telegram/Email)
+│   ├── storage.py            # Postgres batch insert
+│   ├── daily_report.py       # Daily report generator
+│   ├── schemas.py            # UnifiedTelemetry + khu_cn
+│   ├── baseline.py           # Baseline test
+│   ├── replay.py             # Replay tool
+│   └── mor_payload.py        # Mentor's monitor script
+├── main.py                   # Entry point - orchestrate all stages
+├── docker-compose.yml        # 2 containers: app + postgres
 ├── Dockerfile
-├── docker-compose.yml
 ├── requirements.txt
-├── docs/
-│   └── ARCHITECTURE.md  # Tài liệu này
-├── data/
-│   └── raw/
-│       └── raw_events_<timestamp>.jsonl
-└── logs/
-    ├── pipeline.log
-    ├── ingest.log
-    ├── validate.log
-    ├── summary.json
-    ├── invalid_events.jsonl
-    ├── dead_letter.jsonl
-    └── replay/
-        ├── replay_10000.log
-        ├── replay_10000_summary.json
-        ├── replay_100000.log
-        └── replay_100000_summary.json
+├── config.yaml
+└── README.md
 ```
 
 ---
 
-## Mô Tả Từng File
-
-### `main.py`
-- **Vai trò:** Entry point của pipeline
-- **Chức năng:**
-  - Khởi tạo queue nội bộ (bounded, maxsize=20000)
-  - Tạo `Ingestor` và `Validator`
-  - Chạy Validation trên thread riêng
-  - Chạy Ingestion trên main thread
-  - Ghi `summary.json` khi hoàn thành
-
-### `ingest.py`
-- **Vai trò:** Chặng Ingestion
-- **Lớp:** `Ingestor`
-- **Công nghệ:** paho-mqtt (WebSocket Secure), queue.Queue
-- **Chức năng:**
-  - Kết nối MQTT WSS
-- Subscribe topic `v1/C001/+/up/telemetry`
-- Parse JSON, push vào queue
-  - Ghi raw file .jsonl
-  - Log throughput mỗi 10 giây
-
-### `validate_stage.py`
-- **Vai trò:** Chặng Validation
-- **Lớp:** `Validator`
-- **Công nghệ:** Pydantic (schema + range validation)
-- **Chức năng:**
-  - Đọc tuần tự từ queue
-  - Validate schema + range vật lý
-  - Phân loại valid/invalid
-  - Xử lý poison pill (device lỗi liên tục)
-  - Ghi invalid events và dead letter
-
-### `schemas.py`
-- **Vai trò:** Định nghĩa schema và logic validation
-- **Công nghệ:** Pydantic BaseModel
-- **Chứa:**
-  - `EventEnvelope`: Schema chung cho mọi message
-  - `Quality`: Schema cho chất lượng tín hiệu
-  - `WaterMetrics`: Schema cho thiết bị nước (có range)
-  - `GenericMetrics`: Schema tạm cho electricity/light
-  - `validate_event()`: Hàm validate chính
-
-### `baseline.py`
-- **Vai trò:** Đo tốc độ thực tế từ broker
-- **Công nghệ:** paho-mqtt
-- **Chức năng:**
-  - Kết nối MQTT, subscribe, đếm message
-  - Không validate, không lưu
-  - Chỉ đo throughput thuần
-
-### `replay.py`
-- **Vai trò:** Test tăng tải tuần tự
-- **Công nghệ:** itertools (cycle, islice)
-- **Chức năng:**
-  - Đọc data thật từ `raw_events_*.jsonl`
-  - Nhân bản lên target (10k, 100k)
-  - Validate tuần tự (không song song)
-  - Ghi kết quả vào `logs/replay/`
-
-### `mor_payload.py`
-- **Vai trò:** Script monitor từ mentor
-- **Chức năng:** Subscribe & in message ra màn hình
-
----
-
-## Schema Validation Chi Tiết
-
-### EventEnvelope (Mọi thiết bị)
-
-| Field | Kiểu | Bắt buộc | Ghi chú |
-|-------|------|-----------|---------|
-| `event_id` | string | ✅ | |
-| `schema_version` | string | ✅ | |
-| `source` | string | ✅ | |
-| `device_id` | string | ✅ | |
-| `device_type` | string | ✅ | |
-| `group` | string | ✅ | water/electricity/light |
-| `location_id` | string | ✅ | |
-| `ts` | int | ✅ | Epoch milliseconds |
-| `ts_iso` | string | ✅ | |
-| `local_hour` | float | ✅ | |
-| `seq` | int | ✅ | |
-| `use_case` | string | ✅ | |
-| `alerts` | list | ❌ | Default: [] |
-| `metrics` | dict | ✅ | |
-| `quality` | Quality | ✅ | |
-
-### Quality
-
-| Field | Kiểu | Bắt buộc | Range |
-|-------|------|-----------|-------|
-| `rssi_dbm` | float | ✅ | |
-| `snr_db` | float | ✅ | |
-| `latency_ms` | float | ✅ | ≥ 0 |
-
-### WaterMetrics
-
-| Field | Kiểu | Range | Ghi chú |
-|-------|------|-------|---------|
-| `flow_m3_h` | float | 0-1000 | Lưu lượng |
-| `pressure_bar` | float | 0-50 | Áp suất |
-| `cumulative_m3` | float | ≥ 0 | Tổng lưu lượng |
-| `turbidity_ntu` | float | ≥ 0 | Độ đục |
-| `residual_chlorine_mg_l` | float | ≥ 0 | Clo dư |
-| `ph` | float | 0-14 | Độ pH |
-| `conductivity_us_cm` | float | ≥ 0 | Độ dẫn điện |
-| `temperature_c` | float | -10~60 | Nhiệt độ |
-| `status` | string | - | Trạng thái |
-
-### GenericMetrics (Electricity/Light)
-
-- Hiện tại chỉ kiểm tra có field `status` không
-- Các field còn lại là số hợp lệ (không NaN/None sai kiểu)
-- **TODO:** Bổ sung khi có sample thật
-
----
-
-## Docker
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-ENTRYPOINT ["python3", "-u", "main.py"]
-CMD ["--duration", "1200"]
-```
-
-### docker-compose.yml
+## Docker Deployment
 
 ```yaml
+# docker-compose.yml
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartcity-postgres
+    environment:
+      - POSTGRES_DB=smartcity
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
-    container_name: smartcity-ingest-validate
+    container_name: smartcity-pipeline
     environment:
-      - MQTT_HOST=dathoc.net
-      - MQTT_PORT=443
-      - MQTT_USERNAME=test1
-      - MQTT_PASSWORD=123456
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=smartcity
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - PYTHONUNBUFFERED=1
     command:
-      - "--host=dathoc.net"
-      - "--port=443"
-      - "--ws-path=/mq"
-      - "--username=test1"
-      - "--password=123456"
-      - "--topic=v1/C001/+/up/telemetry"
-      - "--duration=1200"
-      - "--insecure"
+      - "python"
+      - "main.py"
+      - "--config"
+      - "config/sources.yaml"
+      - "--duration"
+      - "1200"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./config:/app/config
+      - ./src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
 ```
 
 ---
 
-## Output Files
+## Scale lên 500k–1M msg/s (Giai đoạn sau)
 
-### `logs/summary.json`
-
-```json
-{
-  "run_timestamp": "20260904_143000",
-  "duration_seconds": 1200,
-  "ingestion": {
-    "total_received": 125000
-  },
-  "validation": {
-    "total_processed": 125000,
-    "valid": 123100,
-    "invalid": 1900,
-    "error_rate_pct": 1.52,
-    "elapsed_seconds": 1200.0,
-    "avg_rate_msg_per_s": 104.17,
-    "top_error_types": {
-      "range_error": 1900
-    }
-  },
-  "raw_data_file": "data/raw/raw_events_20260904_143000.jsonl"
-}
-```
-
-### `logs/invalid_events.jsonl`
-
-```json
-{
-  "topic": "v1/C001/+/up/telemetry",
-  "error_type": "range_error",
-  "error_detail": "...",
-  "device_id": "device-001",
-  "group": "water",
-  "raw": { ... }
-}
-```
-
-### `logs/dead_letter.jsonl`
-
-```json
-{
-  "event_id": "...",
-  "device_id": "device-001",
-  "...": "..."
-}
-```
+| Component | Scale Strategy |
+|-----------|----------------|
+| **Ingestion** | Kafka/Redpanda (partition by device_id), multi-replica ingestion pods |
+| **Validation/Detect** | Stateless workers, horizontal scaling via Kubernetes HPA |
+| **State** | Redis Cluster (violation counter, checkpoint, session) |
+| **Storage** | ClickHouse/TimescaleDB (time-series), partitioned by time + khu_cn |
+| **Orchestration** | Kubernetes (Deployment, Service, ConfigMap, Secret) |
+| **Monitoring** | Prometheus + Grafana (throughput, lag, error rate, latency) |
 
 ---
 
-## Các Loại Lỗi Validation
+## Môi Trường
 
-| Loại lỗi | Mô tả | Ví dụ |
-|-----------|-------|-------|
-| `schema_error` | Thiếu field bắt buộc hoặc sai kiểu dữ liệu | Thiếu `device_id`, `ts` không phải int |
-| `range_error` | Giá trị ngoài range vật lý hợp lệ | pH = 15, pressure = -1, temperature = 100°C |
-
-**Lưu ý:** Đây là kiểm tra **schema + range vật lý**, KHÔNG phải ngưỡng vi phạm nghiệp vụ.
-
----
-
-## Throughput Targets
-
-| Mục tiêu | Phương pháp | Ghi chú |
-|----------|-------------|---------|
-| 2k msg/s | Chạy LIVE với broker | Target hiện tại |
-| 10k msg | Replay data local | Test tuần tự |
-| 100k msg | Replay data local | Test tuần tự |
-| 500k-1M msg/s | Kafka/Redpanda + Cluster | Giai đoạn sau |
+- **Python:** 3.11+
+- **MQTT Broker:** dathoc.net:443 (WSS)
+- **Topics:** `v1/C001/+/up/telemetry`, `v1/C002/+/up/telemetry`, `v1/C003/+/up/telemetry`
+- **Data online:** 9h-19h (giờ VN)
+- **TLS:** `--insecure` để bypass certificate verification
+- **PostgreSQL:** 15+ (JSONB support)
 
 ---
 
@@ -380,14 +302,7 @@ services:
 ```txt
 paho-mqtt>=2.0.0
 pydantic>=2.0.0
+psycopg2-binary>=2.9.0
+requests>=2.31.0
+pyyaml>=6.0
 ```
-
----
-
-## Môi Trường
-
-- **Python:** 3.11+
-- **MQTT Broker:** dathoc.net:443 (WSS)
-- **Topic:** v1/C001/+/up/telemetry
-- **Data online:** 9h-19h (giờ VN)
-- **TLS:** Có thể dùng `--insecure` để bypass certificate verification
