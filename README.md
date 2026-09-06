@@ -32,18 +32,21 @@ Xử lý stream MQTT từ **3 khu công nghiệp** (A, B, C), 3 nhóm thiết b�
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
 │  CN A       │  │  CN B       │  │  CN C       │
 │  (mqtt1)    │  │  (mqtt2)    │  │  (mqtt3)    │
+│  v1/C001/+/ │  │  v1/C002/+/ │  │  v1/C003/+/ │
+│  up/telemetry   up/telemetry   up/telemetry   │
 └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
        │                │                │
        ▼                ▼                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              MULTI-SOURCE INGESTION (Multi-thread)          │
-│  3 MQTT Workers → Unified Queue → +khu_cn, source_name     │
+│  3 MQTT Workers (Thread) → Unified Queue + khu_cn, source  │
 └────────────────────────────────┬────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     VALIDATION                              │
-│  Schema (Pydantic) + Range Check + Poison Pill (≥3 lỗi)    │
+│  Schema (Pydantic UnifiedTelemetry) + Range Check          │
+│  Poison Pill: device lỗi ≥3 lần → dead_letter               │
 └────────────────────────────────┬────────────────────────────┘
                                  │
                                  ▼
@@ -55,7 +58,7 @@ Xử lý stream MQTT từ **3 khu công nghiệp** (A, B, C), 3 nhóm thiết b�
                                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     ALERT                                   │
-│  Telegram Bot / SMTP Email → 3-Strike Violation Alerts     │
+│  3-Strike Violation → Telegram Bot / SMTP Email            │
 └────────────────────────────────┬────────────────────────────┘
                                  │
                                  ▼
@@ -67,7 +70,7 @@ Xử lý stream MQTT từ **3 khu công nghiệp** (A, B, C), 3 nhóm thiết b�
                                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     DAILY REPORT                            │
-│  Group by khu_cn/device/group → Telegram/Email Report       │
+│  Group by khu_cn/device/group → Telegram/Email/JSON        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -192,10 +195,10 @@ logs/
 ## 8. Scale lên 500k–1M msg/s (Giai đoạn sau)
 
 Khi cần scale thật, dùng tool có sẵn:
-- **Kafka/Redpanda** - Message bus, partition theo device_id
-- **Redis** - State phân tán (violation counter, checkpoint)
-- **ClickHouse/TimescaleDB** - Time-series DB cho query lớn
-- **Kubernetes** - Orchestrate multi-replica ingestion
+- **Kafka/Redpanda** (partition theo device_id)
+- **Redis** cho state phân tán
+- **ClickHouse/TimescaleDB** cho storage
+- **Kubernetes** cho orchestration
 
 ---
 
