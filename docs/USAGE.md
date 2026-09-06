@@ -50,7 +50,7 @@ Trước khi chạy pipeline, cần kiểm tra xem broker có data không:
 python baseline.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' \
+    --topic 'v1/C001/+/up/telemetry' \
     --duration 60 \
     --insecure
 ```
@@ -63,12 +63,12 @@ python baseline.py \
 ```
 === BASELINE TEST ===
 Broker: dathoc.net:443/mq
-Topic: qa-smartcity/#
+Topic: v1/C001/+/up/telemetry
 Duration: 60s
 Start: 14:30:00
 
 [OK] CONNECTED
-[OK] SUBSCRIBED topic=qa-smartcity/# mid=1
+[OK] SUBSCRIBED topic=v1/C001/+/up/telemetry mid=1
 
 === BASELINE RESULT ===
 Total messages: 125,000
@@ -84,7 +84,7 @@ Throughput: 2,083.3 msg/s
 python main.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' \
+    --topic 'v1/C001/+/up/telemetry' \
     --duration 1200 \
     --insecure
 ```
@@ -98,7 +98,7 @@ python main.py \
 | `--ws-path` | /mq | WebSocket path |
 | `--username` | (required) | Username MQTT |
 | `--password` | (required) | Password MQTT |
-| `--topic` | qa-smartcity/# | Topic subscribe |
+| `--topic` | v1/C001/+/up/telemetry | Topic subscribe |
 | `--qos` | 0 | QoS level |
 | `--client-id` | auto-generated | Client ID |
 | `--insecure` | false | Bypass TLS verification |
@@ -116,7 +116,7 @@ python main.py \
 **Log mẫu:**
 ```
 [ingestion] INFO [MQTT] CONNECTED
-[ingestion] INFO [MQTT] SUBSCRIBED topic=qa-smartcity/# mid=1
+[ingestion] INFO [MQTT] SUBSCRIBED topic=v1/C001/+/up/telemetry mid=1
 [ingestion] INFO [INGEST] window=10.0s recv=10234 rate=1023.4 msg/s total=10234
 [ingestion] INFO [INGEST] window=10.0s recv=10189 rate=1018.9 msg/s total=20423
 ...
@@ -204,7 +204,7 @@ docker run --rm \
     smartcity-pipeline \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' \
+    --topic 'v1/C001/+/up/telemetry' \
     --duration 1200 \
     --insecure
 
@@ -229,7 +229,7 @@ docker run --rm \
 python baseline.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' \
+    --topic 'v1/C001/+/up/telemetry' \
     --duration 30 \
     --insecure
 ```

@@ -107,7 +107,7 @@ logs/
 python3 baseline.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' --duration 60 --insecure
+    --topic 'v1/C001/+/up/telemetry' --duration 60 --insecure
 ```
 
 **Kết quả mong đợi:**
@@ -128,13 +128,13 @@ Throughput: 2,083.3 msg/s
 |-----------|----------|
 | **Script** | `ingest.py` |
 | **Công nghệ** | paho-mqtt (WebSocket Secure), queue.Queue (bounded) |
-| **Data vào** | MQTT message từ broker, topic `qa-smartcity/#` |
+| **Data vào** | MQTT message từ broker, topic `v1/C001/+/up/telemetry` |
 | **Data ra** | JSON object đẩy vào queue + raw file `.jsonl` |
 | **Log** | `logs/ingest.log` — throughput mỗi 10 giây |
 
 **Logic xử lý:**
 1. Kết nối WSS (TLS, force IPv4)
-2. Subscribe topic `qa-smartcity/#`
+2. Subscribe topic `v1/C001/+/up/telemetry`
 3. Nhận message → parse JSON → push vào queue (bounded, maxsize=20000)
 4. Ghi raw message xuống `data/raw/raw_events_<ts>.jsonl`
 5. Log throughput mỗi 10 giây
@@ -143,7 +143,7 @@ Throughput: 2,083.3 msg/s
 **Log output mẫu:**
 ```
 [ingestion] INFO [MQTT] CONNECTED
-[ingestion] INFO [MQTT] SUBSCRIBED topic=qa-smartcity/# mid=1
+[ingestion] INFO [MQTT] SUBSCRIBED topic=v1/C001/+/up/telemetry mid=1
 [ingestion] INFO [INGEST] window=10.0s recv=10234 rate=1023.4 msg/s total=10234
 [ingestion] INFO [INGEST] window=10.0s recv=10189 rate=1018.9 msg/s total=20423
 ...
@@ -204,7 +204,7 @@ Throughput: 2,083.3 msg/s
 python3 baseline.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' --duration 60 --insecure
+    --topic 'v1/C001/+/up/telemetry' --duration 60 --insecure
 ```
 
 **Kết quả:**
@@ -219,7 +219,7 @@ python3 baseline.py \
 python3 main.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' --duration 1200 --insecure
+    --topic 'v1/C001/+/up/telemetry' --duration 1200 --insecure
 ```
 
 **Kết quả:**
@@ -299,7 +299,7 @@ Mentor yêu cầu test ở 3 mức: **2k, 500k, 1M msg/s**
 python3 main.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' --duration 1200 --insecure
+    --topic 'v1/C001/+/up/telemetry' --duration 1200 --insecure
 ```
 
 ### 500k–1M msg/s (scale lý thuyết)
@@ -333,7 +333,7 @@ pip install -r requirements.txt
 # Chạy trực tiếp
 python3 main.py --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' --duration 1200 --insecure
+    --topic 'v1/C001/+/up/telemetry' --duration 1200 --insecure
 
 # Hoặc Docker
 docker compose up --build
@@ -350,7 +350,7 @@ Nếu không nhận được data:
 python3 baseline.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
-    --topic 'qa-smartcity/#' --duration 30 --insecure
+    --topic 'v1/C001/+/up/telemetry' --duration 30 --insecure
 ```
 
 **Kết quả:**

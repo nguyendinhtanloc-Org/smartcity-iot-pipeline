@@ -9,7 +9,7 @@ không validate, không lưu — chỉ đo throughput thuần.
 
 Usage:
     python3 baseline.py --host dathoc.net --port 443 --ws-path /mq \
-        --username test1 --password '123456' --topic 'qa-smartcity/#' \
+        --username test1 --password '123456' --topic 'v1/C001/+/up/telemetry' \
         --duration 60 --insecure
 """
 
@@ -55,7 +55,7 @@ def main():
     parser.add_argument("--ws-path", default="/mq")
     parser.add_argument("--username", required=True)
     parser.add_argument("--password", required=True)
-    parser.add_argument("--topic", default="qa-smartcity/#")
+    parser.add_argument("--topic", default="v1/C001/+/up/telemetry")
     parser.add_argument("--duration", type=int, default=60, help="Thời gian đo (giây)")
     parser.add_argument("--insecure", action="store_true")
     args = parser.parse_args()

@@ -11,7 +11,7 @@ Pipeline xử lý dữ liệu IoT thời gian thực từ các cảm biến đi�
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    MQTT Broker (dathoc.net:443)             │
-│                    Topic: qa-smartcity/#                    │
+│                    Topic: v1/C001/+/up/telemetry                    │
 └──────────────────────────┬──────────────────────────────────┘
                            │ WebSocket Secure (WSS)
                            ▼
@@ -62,7 +62,7 @@ Ghi raw file .jsonl (dùng cho replay)
 
 **Chi tiết:**
 - Kết nối WSS (TLS, force IPv4)
-- Subscribe topic `qa-smartcity/#`
+- Subscribe topic `v1/C001/+/up/telemetry`
 - Nhận message → parse JSON → push vào `queue.Queue`
 - Ghi raw message xuống `data/raw/raw_events_<timestamp>.jsonl`
 - Log throughput mỗi 10 giây
@@ -159,8 +159,8 @@ smartcity-iot-pipeline/
 - **Công nghệ:** paho-mqtt (WebSocket Secure), queue.Queue
 - **Chức năng:**
   - Kết nối MQTT WSS
-  - Subscribe topic `qa-smartcity/#`
-  - Parse JSON, push vào queue
+- Subscribe topic `v1/C001/+/up/telemetry`
+- Parse JSON, push vào queue
   - Ghi raw file .jsonl
   - Log throughput mỗi 10 giây
 
@@ -292,7 +292,7 @@ services:
       - "--ws-path=/mq"
       - "--username=test1"
       - "--password=123456"
-      - "--topic=qa-smartcity/#"
+      - "--topic=v1/C001/+/up/telemetry"
       - "--duration=1200"
       - "--insecure"
     volumes:
@@ -332,7 +332,7 @@ services:
 
 ```json
 {
-  "topic": "qa-smartcity/water/device-001",
+  "topic": "v1/C001/+/up/telemetry",
   "error_type": "range_error",
   "error_detail": "...",
   "device_id": "device-001",
@@ -388,6 +388,6 @@ pydantic>=2.0.0
 
 - **Python:** 3.11+
 - **MQTT Broker:** dathoc.net:443 (WSS)
-- **Topic:** qa-smartcity/#
+- **Topic:** v1/C001/+/up/telemetry
 - **Data online:** 9h-19h (giờ VN)
 - **TLS:** Có thể dùng `--insecure` để bypass certificate verification

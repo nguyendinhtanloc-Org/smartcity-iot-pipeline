@@ -67,7 +67,7 @@ def main():
     parser.add_argument("--ws-path", default="/mq")
     parser.add_argument("--username", required=True)
     parser.add_argument("--password", required=True)
-    parser.add_argument("--topic", default="qa-smartcity/#")
+    parser.add_argument("--topic", default="v1/C001/+/up/telemetry")
     parser.add_argument("--qos", type=int, default=0)
     parser.add_argument("--client-id", default=None)
     parser.add_argument("--insecure", action="store_true")
