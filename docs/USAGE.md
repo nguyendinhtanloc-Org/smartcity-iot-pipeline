@@ -1,14 +1,17 @@
-# Hướng Dẫn Sử Dụng — SmartCity IoT Pipeline
+# Hướng Dẫn Sử Dụng — SmartCity IoT Pipeline (Multi-Source)
 
 ## Yêu Cầu Hệ Thống
 
 - Python 3.11+
 - pip (package manager)
-- Docker (tùy chọn)
+- Docker & Docker Compose (tùy chọn)
+- PostgreSQL 15+ (cho production)
+
+---
 
 ## Cài Đặt
 
-### Cách 1: Cài đặt trực tiếp
+### Cách 1: Cài đặt trực tiếp (Local)
 
 ```bash
 # Clone repository
@@ -28,7 +31,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Cách 2: Docker
+### Cách 2: Docker (Khuyến nghị cho Production)
 
 ```bash
 # Build image
@@ -40,24 +43,81 @@ docker build -t smartcity-pipeline .
 
 ---
 
+## Cấu Hình Nguồn Dữ Liệu (Multi-Source)
+
+Chỉnh sửa file `config/sources.yaml`:
+
+```yaml
+mqtt_sources:
+  - name: "CN_A"
+    host: "dathoc.net"
+    port: 443
+    ws_path: "/mq"
+    username: "test1"
+    password: "123456"
+    company_id: "C001"
+    gateways:
+      - "electricity"
+      - "water"
+      - "lighting"
+    khu_cn: "A"
+    topic: "v1/C001/+/up/telemetry"
+    qos: 0
+
+  - name: "CN_B"
+    host: "dathoc.net"
+    port: 443
+    ws_path: "/mq"
+    username: "test1"
+    password: "123456"
+    company_id: "C002"
+    gateways:
+      - "electricity"
+      - "water"
+      - "lighting"
+    khu_cn: "B"
+    topic: "v1/C002/+/up/telemetry"
+    qos: 0
+
+  - name: "CN_C"
+    host: "dathoc.net"
+    port: 443
+    ws_path: "/mq"
+    username: "test1"
+    password: "123456"
+    company_id: "C003"
+    gateways:
+      - "electricity"
+      - "water"
+      - "lighting"
+    khu_cn: "C"
+    topic: "v1/C003/+/up/telemetry"
+    qos: 0
+
+global:
+  queue_maxsize: 20000
+  reconnect_delay: 5
+  checkpoint_interval: 1000
+  log_level: "INFO"
+```
+
+---
+
 ## Chạy Pipeline
 
-### Bước 1: Verify Kết Nối Broker
-
-Trước khi chạy pipeline, cần kiểm tra xem broker có data không:
+### 1. Verify Kết Nối Broker (Baseline)
 
 ```bash
-python baseline.py \
+python src/baseline.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
     --topic 'v1/C001/+/up/telemetry' \
-    --duration 60 \
-    --insecure
+    --duration 60 --insecure
 ```
 
 **Kết quả:**
 - `total=0` → Broker không có data → Liên hệ mentor bật simulator
-- `total>0` → Broker có data → Tiếp tục Bước 2
+- `total>0` → Broker có data → Tiếp tục chạy pipeline
 
 **Log mẫu:**
 ```
@@ -65,7 +125,6 @@ python baseline.py \
 Broker: dathoc.net:443/mq
 Topic: v1/C001/+/up/telemetry
 Duration: 60s
-Start: 14:30:00
 
 [OK] CONNECTED
 [OK] SUBSCRIBED topic=v1/C001/+/up/telemetry mid=1
@@ -78,68 +137,69 @@ Throughput: 2,083.3 msg/s
 
 ---
 
-### Bước 2: Chạy LIVE 20 phút
+### 2. Chạy Pipeline Multi-Source (20 phút)
 
 ```bash
-python main.py \
-    --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' \
-    --duration 1200 \
-    --insecure
+# Cấu hình sources trong config/sources.yaml trước
+python main.py --config config/sources.yaml --duration 1200
 ```
 
 **Parameters:**
 
 | Parameter | Mặc định | Mô tả |
 |-----------|----------|-------|
-| `--host` | dathoc.net | MQTT broker host |
-| `--port` | 443 | MQTT broker port |
-| `--ws-path` | /mq | WebSocket path |
-| `--username` | (required) | Username MQTT |
-| `--password` | (required) | Password MQTT |
-| `--topic` | v1/C001/+/up/telemetry | Topic subscribe |
-| `--qos` | 0 | QoS level |
-| `--client-id` | auto-generated | Client ID |
-| `--insecure` | false | Bypass TLS verification |
+| `--config` | config/sources.yaml | File config multi-source |
 | `--duration` | 1200 | Thời gian chạy (giây) |
-| `--queue-maxsize` | 20000 | Max queue size |
+| `--queue-maxsize` | 20000 | Queue max size |
+| `--log-level` | INFO | DEBUG/INFO/WARNING/ERROR |
 
 **Kết quả:**
-- `logs/ingest.log` — Log Ingestion
+- `logs/ingest.log` — Log Ingestion (per source)
 - `logs/validate.log` — Log Validation
+- `logs/detect.log` — Log Detection
+- `logs/alert.log` — Log Alert
+- `logs/storage.log` — Log Storage
 - `logs/summary.json` — Tổng hợp số liệu
-- `data/raw/raw_events_<timestamp>.jsonl` — Data thô
-- `logs/invalid_events.jsonl` — Message lỗi
-- `logs/dead_letter.jsonl` — Poison pill
+- `logs/invalid_events.jsonl` — Message lỗi schema/range
+- `logs/dead_letter.jsonl` — Poison pill (device lỗi ≥3 lần)
 
-**Log mẫu:**
+**Log mẫu Ingestion:**
 ```
-[ingestion] INFO [MQTT] CONNECTED
-[ingestion] INFO [MQTT] SUBSCRIBED topic=v1/C001/+/up/telemetry mid=1
-[ingestion] INFO [INGEST] window=10.0s recv=10234 rate=1023.4 msg/s total=10234
-[ingestion] INFO [INGEST] window=10.0s recv=10189 rate=1018.9 msg/s total=20423
-...
-[ingestion] INFO [INGEST] DONE total=125000 elapsed=120.1s avg_rate=1040.8 msg/s
+[ingestion] INFO [CN_A] CONNECTED
+[ingestion] INFO [CN_A] SUBSCRIBED topic=v1/C001/+/up/telemetry mid=1
+[ingestion] INFO [CN_A] window=10.0s recv=10234 rate=1023.4 msg/s total=10234
+[ingestion] INFO [CN_B] window=10.0s recv=9876 rate=987.6 msg/s total=9876
+[ingestion] INFO [CN_C] window=10.0s recv=10123 rate=1012.3 msg/s total=10123
+```
 
-[validation] INFO [VALIDATE] window=10.0s valid=10089 invalid=145 rate=1023.3 msg/s total_valid=10089 total_invalid=145
-...
-[validation] INFO [VALIDATE] DONE total=125000 valid=123100 invalid=1900 error_rate=1.52% avg_rate=1040.7 msg/s elapsed=120.1s top_errors={'range_error': 1900}
+**Log mẫu Validation:**
+```
+[validation] INFO window=10.0s valid=30123 invalid=45 rate=3016.8 msg/s total_valid=30123 total_invalid=45
+[validation] INFO DONE total=360000 valid=359820 invalid=180 error_rate=0.05% avg_rate=3000.0 msg/s
+```
+
+**Log mẫu Detection:**
+```
+[detect] INFO window=10.0s processed=30000 violations=15 alerts=2 rate=3000.0 msg/s
+[detect] WARNING [ALERT] 3-strike violation: A:DEV-001 (streak=3)
 ```
 
 ---
 
-### Bước 3: Kiểm Tra Kết Quả
+### 3. Kiểm Tra Kết Quả
 
 ```bash
 # Xem tổng hợp
 cat logs/summary.json
 
 # Xem chi tiết Ingestion
-cat logs/ingest.log | tail -5
+cat logs/ingest.log | tail -10
 
 # Xem chi tiết Validation
-cat logs/validate.log | tail -5
+cat logs/validate.log | tail -10
+
+# Xem chi tiết Detection
+cat logs/detect.log | tail -10
 
 # Xem message lỗi (10 dòng đầu)
 head -10 logs/invalid_events.jsonl
@@ -150,42 +210,53 @@ cat logs/dead_letter.jsonl
 
 ---
 
-### Bước 4: Test Replay Tuần Tự
-
-Sau khi chạy LIVE xong, test replay với data thật:
+### 4. Test Replay (Tăng Tải Tuần Tự)
 
 ```bash
-# Hoàn thành 10k trước, rồi mới chạy 100k
-python replay.py \
-    --input data/raw/raw_events_<timestamp>.jsonl \
-    --target 10000
+# Chạy baseline trước để lấy data
+python main.py --config config/sources.yaml --duration 1200
 
-python replay.py \
-    --input data/raw/raw_events_<timestamp>.jsonl \
-    --target 100000
+# Replay 10k messages (nhanh, không delay)
+python src/replay.py --input data/raw/raw_events_<timestamp>.jsonl --target 10000
+
+# Replay 100k messages
+python src/replay.py --input data/raw/raw_events_<timestamp>.jsonl --target 100000
+
+# Replay với tốc độ 20k msg/s trong 20 phút
+python src/replay.py --input data/raw/raw_events_<timestamp>.jsonl --rate 20000 --duration 1200
 ```
-
-**Kết quả:**
-- `logs/replay/replay_10000.log`
-- `logs/replay/replay_10000_summary.json`
-- `logs/replay/replay_100000.log`
-- `logs/replay/replay_100000_summary.json`
 
 ---
 
-## Chạy Docker
+### 5. Chạy Daily Report
+
+```bash
+# Tạo báo cáo hôm qua
+python -m src.daily_report
+
+# Tạo báo cáo cho ngày cụ thể
+python -c "
+from src.daily_report import run_daily_report
+from datetime import datetime
+run_daily_report(target_date=datetime(2026, 9, 6))
+"
+```
+
+---
+
+## Chạy với Docker
 
 ### Docker Compose (Khuyến nghị)
 
 ```bash
-# Chạy LIVE 20 phút
+# Build & chạy
 docker compose up --build
 
-# Hoặc chạy nền
+# Chạy nền
 docker compose up --build -d
 
 # Xem logs
-docker compose logs -f
+docker compose logs -f app
 
 # Dừng
 docker compose down
@@ -197,71 +268,71 @@ docker compose down
 # Build image
 docker build -t smartcity-pipeline .
 
-# Chạy LIVE 20 phút
+# Chạy pipeline 20 phút
 docker run --rm \
     -v $(pwd)/data:/app/data \
     -v $(pwd)/logs:/app/logs \
+    -v $(pwd)/config:/app/config \
+    -v $(pwd)/src:/app/src \
     smartcity-pipeline \
-    --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' \
-    --duration 1200 \
-    --insecure
+    python main.py --config config/sources.yaml --duration 1200
 
 # Chạy replay 10k
 docker run --rm \
     -v $(pwd)/data:/app/data \
     -v $(pwd)/logs:/app/logs \
     smartcity-pipeline \
-    python3 replay.py \
-    --input data/raw/raw_events_<timestamp>.jsonl \
-    --target 10000
+    python src/replay.py --input data/raw/raw_events_<timestamp>.jsonl --target 10000
 ```
 
 ---
 
-## Debug — Kiểm Tra Kết Nối
+## Debug & Troubleshooting
 
 ### Không Nhận Được Data
 
 ```bash
 # Chạy baseline test
-python baseline.py \
+python src/baseline.py \
     --host dathoc.net --port 443 --ws-path /mq \
     --username test1 --password '123456' \
     --topic 'v1/C001/+/up/telemetry' \
-    --duration 30 \
-    --insecure
+    --duration 30 --insecure
 ```
 
 **Kết quả:**
 - `CONNECTED` + `SUBSCRIBED` + `total=0` → Broker không có data
-- `CONNECT FAILED` → Lỗi kết nối
+- `CONNECT FAILED` → Lỗi kết nối mạng
 - `SSL error` → Thêm flag `--insecure`
 
-### Kiểm Tra Log
+### Kiểm Tra Log Real-time
 
 ```bash
-# Xem log pipeline
+# Log tổng
 tail -f logs/pipeline.log
 
-# Xem log ingestion
+# Log Ingestion
 tail -f logs/ingest.log
 
-# Xem log validation
+# Log Validation
 tail -f logs/validate.log
+
+# Log Detection
+tail -f logs/detect.log
+
+# Log Storage
+tail -f logs/storage.log
 ```
 
-### Kiểm Tra Queue
+### Kiểm Tra Queue Backpressure
 
-Nếu queue đầy (backpressure), sẽ có log:
 ```
 [ingestion] WARNING Queue full, blocking...
 ```
 
-Giải pháp:
+**Giải pháp:**
 - Tăng `--queue-maxsize` (mặc định 20000)
-- Hoặc giảm tốc độ broker
+- Kiểm tra downstream stages có bị chậm không
 
 ---
 
@@ -269,77 +340,81 @@ Giải pháp:
 
 ### Log Output Mẫu
 
-**Ingestion:**
+**Ingestion (per source):**
 ```
-[ingestion] INFO [INGEST] window=10.0s recv=10234 rate=1023.4 msg/s total=10234
+[ingestion] INFO [CN_A] window=10.0s recv=10234 rate=1023.4 msg/s total=10234
+[ingestion] INFO [CN_B] window=10.0s recv=9876 rate=987.6 msg/s total=9876
 ```
 
 **Validation:**
 ```
-[validation] INFO [VALIDATE] window=10.0s valid=10089 invalid=145 rate=1023.3 msg/s total_valid=10089 total_invalid=145
+[validation] INFO window=10.0s valid=30123 invalid=45 rate=3016.8 msg/s total_valid=30123 total_invalid=45
+```
+
+**Detection:**
+```
+[detect] INFO window=10.0s processed=30000 violations=15 alerts=2 rate=3000.0 msg/s
+```
+
+**Storage:**
+```
+[storage] INFO window=10.0s stored=30000 buffer=0 rate=3000.0 msg/s
 ```
 
 ### Summary JSON
 
 ```json
 {
-  "run_timestamp": "20260904_143000",
+  "run_timestamp": "20260907_143000",
   "duration_seconds": 1200,
+  "pipeline_stages": ["ingestion", "validation", "detection", "alert", "storage"],
   "ingestion": {
-    "total_received": 125000
+    "CN_A": {"total": 120000, "avg_rate": 1000},
+    "CN_B": {"total": 115000, "avg_rate": 958},
+    "CN_C": {"total": 110000, "avg_rate": 917}
   },
   "validation": {
-    "total_processed": 125000,
-    "valid": 123100,
-    "invalid": 1900,
-    "error_rate_pct": 1.52,
-    "elapsed_seconds": 1200.0,
-    "avg_rate_msg_per_s": 104.17,
-    "top_error_types": {
-      "range_error": 1900
-    }
+    "total_processed": 345000,
+    "valid": 344800,
+    "invalid": 200,
+    "error_rate_pct": 0.06
   },
-  "raw_data_file": "data/raw/raw_events_20260904_143000.jsonl"
+  "detection": {
+    "total_processed": 344800,
+    "violations": 150,
+    "alerts_triggered": 12
+  },
+  "storage": {
+    "total_stored": 345000,
+    "errors": 0
+  }
 }
 ```
-
----
-
-## Kết Quả Mong Đợi
-
-### Sau 20 phút chạy LIVE
-
-| Metric | Giá trị |
-|--------|---------|
-| Total messages | ~125,000 (tùy tốc độ broker) |
-| Avg throughput | ~1,040 msg/s |
-| Elapsed | 1200s |
-| Raw file | `data/raw/raw_events_<ts>.jsonl` |
-
-### Validation
-
-| Metric | Giá trị |
-|--------|---------|
-| Total processed | ~125,000 |
-| Valid | ~123,100 (98.5%) |
-| Invalid | ~1,900 (1.5%) |
-| Top error | range_error |
-| Invalid file | `logs/invalid_events.jsonl` |
-
----
-
-## Mentor Yêu Cầu Gửi
-
-- Code (toàn bộ file)
-- Log (`ingest.log`, `validate.log`)
-- Kết quả (`summary.json`)
 
 ---
 
 ## Lưu Ý Quan Trọng
 
 1. **Data online:** 9h-19h (giờ VN)
-2. **Chạy tuần tự:** Không tự dựng logic song song/worker
-3. **Replay:** Hoàn thành 10k trước, rồi mới chạy 100k
-4. **Debug:** Luôn chạy baseline trước khi chạy LIVE
-5. **TLS:** Dùng `--insecure` nếu có lỗi certificate
+2. **Chạy tuần tự:** Baseline → Pipeline → Replay (10k → 100k)
+3. **Config thật:** Cập nhật `config/sources.yaml` với info thật từ mentor
+4. **TLS:** Dùng `--insecure` nếu có lỗi certificate
+5. **PostgreSQL:** Cần chạy PostgreSQL 15+ cho storage
+6. **Sequential processing:** Không tự dựng logic parallel thủ công (dùng Kafka/Redis khi scale thật)
+
+---
+
+## Files Quan Trọng
+
+| File | Mô tả |
+|------|-------|
+| `config/sources.yaml` | Config 3 nguồn MQTT |
+| `src/schemas.py` | Schema `UnifiedTelemetry` + `khu_cn` |
+| `src/ingest.py` | Multi-threaded ingestion |
+| `src/validate.py` | Validation + poison pill |
+| `src/detect.py` | Threshold + 3-strike |
+| `src/alert.py` | Telegram/Email alert |
+| `src/storage.py` | Postgres batch insert |
+| `src/daily_report.py` | Daily report generator |
+| `main.py` | Orchestration entry point |
+| `docker-compose.yml` | App + Postgres containers |
