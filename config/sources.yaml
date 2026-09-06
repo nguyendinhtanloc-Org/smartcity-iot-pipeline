@@ -1,0 +1,59 @@
+# config/sources.yaml - GIẢ ĐỊNH (sẽ sửa khi mentor cấp config thật)
+# Multi-source MQTT configuration for 3 Industrial Zones
+
+mqtt_sources:
+  - name: "CN_A"
+    host: "dathoc.net"
+    port: 443
+    ws_path: "/mq"
+    username: "test1"
+    password: "123456"
+    company_id: "C001"
+    gateways:
+      - "electricity"
+      - "water"
+      - "lighting"
+    khu_cn: "A"
+    topic: "v1/C001/+/up/telemetry"
+    qos: 0
+    client_id: null
+
+  - name: "CN_B"
+    host: "dathoc.net"
+    port: 443
+    ws_path: "/mq"
+    username: "test1"
+    password: "123456"
+    company_id: "C002"
+    gateways:
+      - "electricity"
+      - "water"
+      - "lighting"
+    khu_cn: "B"
+    topic: "v1/C002/+/up/telemetry"
+    qos: 0
+    client_id: null
+
+  - name: "CN_C"
+    host: "dathoc.net"
+    port: 443
+    ws_path: "/mq"
+    username: "test1"
+    password: "123456"
+    company_id: "C003"
+    gateways:
+      - "electricity"
+      - "water"
+      - "lighting"
+    khu_cn: "C"
+    topic: "v1/C003/+/up/telemetry"
+    qos: 0
+    client_id: null
+
+# Global settings
+global:
+  queue_maxsize: 20000
+  reconnect_delay: 5
+  checkpoint_interval: 1000
+  log_level: "INFO"
+  client_id_prefix: "ingest"

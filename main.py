@@ -1,26 +1,12 @@
 """
 main.py
---------
-Chạy LIVE: kết nối MQTT thật, Ingestion đẩy vào queue, Validation
-tiêu thụ tuần tự (chạy trên thread riêng để không block MQTT
-network loop). Sau khi hết thời gian chạy, ghi summary.json.
+-------
+Entry point cho Multi-Source SmartCity IoT Pipeline.
 
-Cách chạy (ví dụ 20 phút = 1200 giây):
+Pipeline: Multi-Source Ingestion → Validate → Detect → Alert → Storage → Daily Report
 
-    python3 main.py \
-        --host dathoc.net --port 443 --ws-path /mq \
-        --username test1 --password '123456' \
-        --topic 'qa-smartcity/#' \
-        --duration 1200
-
-Kết quả:
-    logs/ingest.log      - log chặng Ingestion
-    logs/validate.log    - log chặng Validation
-    logs/summary.json    - tổng hợp số liệu cuối cùng
-    data/raw/raw_events_<timestamp>.jsonl - data thật lưu local
-                                             (dùng cho replay.py)
-    logs/invalid_events.jsonl - message không hợp lệ
-    logs/dead_letter.jsonl    - message lỗi liên tục (poison pill)
+Chạy:
+    python main.py --config config/sources.yaml --duration 1200
 """
 
 from __future__ import annotations
@@ -33,9 +19,12 @@ import threading
 import time
 from pathlib import Path
 
-from ingest import Ingestor
-from validate_stage import Validator
-
+from src.ingest import MultiSourceIngestor, load_sources_config
+from src.validate import Validator
+from src.detect import Detector
+from src.alert import Alerter
+from src.storage import Storage
+from src.schemas import UnifiedTelemetry, validate_event
 
 BASE_DIR = Path(__file__).parent
 LOG_DIR = BASE_DIR / "logs"
@@ -44,16 +33,21 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def setup_logging():
+def setup_logging(log_level: str = "INFO"):
     fmt = "%(asctime)s [%(name)s] %(levelname)s %(message)s"
-    logging.basicConfig(level=logging.INFO, format=fmt, handlers=[
+    logging.basicConfig(level=getattr(logging, log_level.upper()), format=fmt, handlers=[
         logging.StreamHandler(),
         logging.FileHandler(LOG_DIR / "pipeline.log", encoding="utf-8"),
     ])
 
-    # log riêng theo từng chặng, để nộp bài đúng yêu cầu
-    # "log riêng .log file cho từng chặng"
-    for name, filename in [("ingestion", "ingest.log"), ("validation", "validate.log")]:
+    # Log riêng từng chặng
+    for name, filename in [
+        ("ingestion", "ingest.log"),
+        ("validation", "validate.log"),
+        ("detect", "detect.log"),
+        ("alert", "alert.log"),
+        ("storage", "storage.log"),
+    ]:
         logger = logging.getLogger(name)
         handler = logging.FileHandler(LOG_DIR / filename, encoding="utf-8")
         handler.setFormatter(logging.Formatter(fmt))
@@ -61,56 +55,143 @@ def setup_logging():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Ingestion + Validation live pipeline")
-    parser.add_argument("--host", default="dathoc.net")
-    parser.add_argument("--port", type=int, default=443)
-    parser.add_argument("--ws-path", default="/mq")
-    parser.add_argument("--username", required=True)
-    parser.add_argument("--password", required=True)
-    parser.add_argument("--topic", default="v1/C001/+/up/telemetry")
-    parser.add_argument("--qos", type=int, default=0)
-    parser.add_argument("--client-id", default=None)
-    parser.add_argument("--insecure", action="store_true")
-    parser.add_argument("--duration", type=int, default=1200, help="Thời gian chạy (giây), mặc định 1200s = 20 phút")
-    parser.add_argument("--queue-maxsize", type=int, default=20000, help="Bounded queue để tránh OOM")
+    parser = argparse.ArgumentParser(description="SmartCity IoT Pipeline - Multi-Source")
+    parser.add_argument("--config", default="config/sources.yaml", help="Config file YAML")
+    parser.add_argument("--duration", type=int, default=1200, help="Thời gian chạy (giây)")
+    parser.add_argument("--queue-maxsize", type=int, default=20000, help="Queue max size")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     args = parser.parse_args()
 
-    if not args.client_id:
-        args.client_id = f"ingest-validate-{int(time.time())}"
+    setup_logging(args.log_level)
+    logger = logging.getLogger("pipeline")
 
-    setup_logging()
+    # Load config
+    sources, global_config = load_sources_config(args.config)
+    global_config["queue_maxsize"] = args.queue_maxsize
+    global_config["log_level"] = args.log_level
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    raw_path = RAW_DIR / f"raw_events_{timestamp}.jsonl"
-    invalid_path = LOG_DIR / "invalid_events.jsonl"
-    dead_letter_path = LOG_DIR / "dead_letter.jsonl"
+    raw_path = BASE_DIR / "data" / "raw" / f"raw_events_{timestamp}.jsonl"
+    invalid_path = BASE_DIR / "logs" / "invalid_events.jsonl"
+    dead_letter_path = BASE_DIR / "logs" / "dead_letter.jsonl"
 
-    internal_queue: "queue.Queue" = queue.Queue(maxsize=args.queue_maxsize)
+    # Queue internal cho pipeline
+    ingest_queue: "queue.Queue" = queue.Queue(maxsize=args.queue_maxsize)
+    validate_queue: "queue.Queue" = queue.Queue(maxsize=args.queue_maxsize)
+    detect_queue: "queue.Queue" = queue.Queue(maxsize=args.queue_maxsize)
+    alert_queue: "queue.Queue" = queue.Queue(maxsize=args.queue_maxsize)
 
-    ingestor = Ingestor(args, internal_queue, raw_path)
-    validator = Validator(internal_queue, invalid_path, dead_letter_path)
+    # Khởi tạo các component
+    ingestor = MultiSourceIngestor(
+        sources_config=[],  # sẽ load trong run
+        global_config=global_config,
+        out_queue=ingest_queue
+    )
 
-    # Validation chạy trên thread riêng, đọc tuần tự từ queue —
-    # tách khỏi MQTT network loop để không làm nghẽn nhận message.
-    validate_thread = threading.Thread(target=validator.run_from_queue, daemon=True)
-    validate_thread.start()
+    # Validator
+    validator = Validator(
+        in_queue=ingest_queue,
+        out_queue=validate_queue,
+        invalid_path=BASE_DIR / "logs" / "invalid_events.jsonl",
+        dead_letter_path=BASE_DIR / "logs" / "dead_letter.jsonl"
+    )
 
-    ingestor.run(duration_seconds=args.duration)
+    # Detector
+    detector = Detector(
+        in_queue=validate_queue,
+        out_queue=detect_queue
+    )
 
-    # Đợi Validation xử lý nốt phần còn lại trong queue
-    validate_thread.join(timeout=60)
+    # Alerter
+    alerter = Alerter(
+        in_queue=detect_queue,
+        out_queue=alert_queue
+    )
 
+    # Storage
+    storage = Storage(
+        in_queue=alert_queue
+    )
+
+    # Setup logging
+    setup_logging("INFO")
+    logger = logging.getLogger("pipeline")
+
+    logger.info("=" * 60)
+    logger.info("SMARTCITY IOT PIPELINE STARTING")
+    logger.info("=" * 60)
+
+    # Start all components
+    threads = []
+
+    # 1. Ingestion (multi-source)
+    def run_ingestion():
+        # Load sources config internally
+        import yaml
+        with open("config/sources.yaml", "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        sources = config.get("mqtt_sources", [])
+        global_cfg = config.get("global", {})
+        global_cfg["queue_maxsize"] = args.queue_maxsize
+        
+        ingestor = MultiSourceIngestor(sources, global_cfg, ingest_queue)
+        ingestor.run(duration_seconds=args.duration)
+    
+    ingest_thread = threading.Thread(target=run_ingestion, daemon=True)
+    threads.append(("ingestion", ingest_thread))
+
+    # 2. Validation
+    validate_thread = threading.Thread(target=validator.run, daemon=True)
+    threads.append(("validation", validate_thread))
+
+    # 3. Detection
+    detect_thread = threading.Thread(target=detector.run, daemon=True)
+    threads.append(("detection", detect_thread))
+
+    # 4. Alert
+    alert_thread = threading.Thread(target=alerter.run, daemon=True)
+    threads.append(("alert", alert_thread))
+
+    # 5. Storage
+    storage_thread = threading.Thread(target=storage.run, daemon=True)
+    threads.append(("storage", storage_thread))
+
+    # Start all threads
+    for name, thread in threads:
+        thread.start()
+        logger.info(f"Started {name} thread")
+
+    # Wait for ingestion to complete
+    ingest_thread.join()
+
+    # Signal downstream to finish
+    ingest_queue.put(None)  # Poison pill for validator
+    
+    # Wait for validation
+    validate_thread.join(timeout=30)
+    validate_queue.put(None)
+    
+    # Wait for detection
+    detect_thread.join(timeout=30)
+    detect_queue.put(None)
+    
+    # Wait for alert
+    alert_thread.join(timeout=30)
+    alert_queue.put(None)
+    
+    # Wait for storage
+    storage_thread.join(timeout=30)
+
+    logger.info("All pipeline stages completed")
+
+    # Summary
     summary = {
-        "run_timestamp": timestamp,
+        "run_timestamp": time.strftime("%Y%m%d_%H%M%S"),
         "duration_seconds": args.duration,
-        "ingestion": {
-            "total_received": ingestor.count,
-        },
-        "validation": validator.summary_dict(),
-        "raw_data_file": str(raw_path),
+        "pipeline_stages": ["ingestion", "validation", "detection", "alert", "storage"],
     }
 
-    with open(LOG_DIR / "summary.json", "w", encoding="utf-8") as f:
+    with open(BASE_DIR / "logs" / "summary.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
     print(json.dumps(summary, ensure_ascii=False, indent=2))

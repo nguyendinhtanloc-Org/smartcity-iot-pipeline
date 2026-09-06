@@ -24,6 +24,7 @@ Data thực tế format:
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ValidationError
 
@@ -92,6 +93,23 @@ class ElectricityTelemetry(BaseModel):
 
 
 # ---------------------------------------------------------------
+# Unified Telemetry - Schema chung cho multi-source ingestion
+# ---------------------------------------------------------------
+
+class UnifiedTelemetry(ElectricityTelemetry):
+    """Schema chung cho multi-source ingestion - thêm khu_cn, source_name"""
+    
+    # Multi-source fields
+    khu_cn: str = Field(..., description="Khu công nghiệp: A, B, C")
+    source_name: str = Field(..., description="Tên nguồn: CN_A, CN_B, CN_C")
+    received_at: int = Field(default_factory=lambda: int(time.time()), description="Thời gian nhận (epoch seconds)")
+
+    class Config:
+        populate_by_name = True
+        extra = "allow"
+
+
+# ---------------------------------------------------------------
 # Kết quả validate
 # ---------------------------------------------------------------
 
@@ -100,24 +118,27 @@ class ValidationResult(BaseModel):
     error_type: Optional[str] = None
     error_detail: Optional[str] = None
     device_id: Optional[str] = None
+    khu_cn: Optional[str] = None
 
 
-def validate_event(raw: dict) -> ValidationResult:
+def validate_event(raw: dict, schema_class: type = UnifiedTelemetry) -> ValidationResult:
     """
     Validate 1 message raw (dict đã parse từ JSON).
     Trả về ValidationResult — không raise exception ra ngoài.
     """
     try:
-        ElectricityTelemetry(**raw)
+        schema_class(**raw)
     except ValidationError as e:
         return ValidationResult(
             is_valid=False,
             error_type="schema_error",
             error_detail=str(e.errors()[:2]),
             device_id=raw.get("dev_id"),
+            khu_cn=raw.get("khu_cn"),
         )
 
     return ValidationResult(
         is_valid=True,
         device_id=raw.get("dev_id"),
+        khu_cn=raw.get("khu_cn"),
     )

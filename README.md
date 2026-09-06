@@ -3,7 +3,7 @@
 **Người thực hiện:** Nguyễn Đình Tấn Lộc  
 **Ngày:** 04/09/2026  
 **Deadline:** 05/09/2026  
-**Trạng thái:** Giai đoạn 2 — Ingestion + Validation
+**Trạng thái:** Giai đoạn 2 — Multi-Source Ingestion + Validation + Detect + Alert + Storage
 
 ---
 
@@ -19,38 +19,56 @@
 
 ## 1. Phạm vi
 
-Xử lý stream MQTT, 3 nhóm thiết bị điện/nước/ánh sáng:
+Xử lý stream MQTT từ **3 khu công nghiệp** (A, B, C), 3 nhóm thiết bị điện/nước/ánh sáng:
 - **Target throughput:** 2k msg/s (giai đoạn này), scale lên 500k–1M msg/s (giai đoạn sau)
 - **Data online:** 9h–19h (giờ VN)
-- **Trọng tâm:** Logic kiểm tra data đúng/sai (Validation) — không tự dựng logic vận hành song song
+- **Trọng tâm:** Multi-source ingestion, logic kiểm tra data đúng/sai (Validation), detect violations, alert, storage
 
 ---
 
 ## 2. Kiến trúc tổng thể
 
 ```
-                    ┌─────────────────┐
-                    │  MQTT Broker    │
-                    │ dathoc.net:443  │
-                    └────────┬────────┘
-                             │ WSS (WebSocket Secure)
-                             ▼
-                    ┌─────────────────┐
-                    │    BASELINE     │ ← Đo tốc độ thực tế từ broker
-                    │  (baseline.py)  │
-                    └────────┬────────┘
-                             │
-                             ▼
-┌────────────────────────────────────────────┐
-│              main.py (Entry point)         │
-│  ┌──────────────┐      ┌──────────────┐   │
-│  │  Ingestion   │ queue│  Validation  │   │
-│  │ (ingest.py)  │─────▶│(validate.py) │   │
-│  └──────┬───────┘      └──────┬───────┘   │
-│         │                     │            │
-│         ▼                     ▼            │
-│  data/raw/*.jsonl    logs/invalid_*.jsonl  │
-└────────────────────────────────────────────┘
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│  CN A       │  │  CN B       │  │  CN C       │
+│  (mqtt1)    │  │  (mqtt2)    │  │  (mqtt3)    │
+└──────┬──────┘  └──────┬──────┘  └──────┬──────┘
+       │                │                │
+       ▼                ▼                ▼
+┌─────────────────────────────────────────────────────────────┐
+│              MULTI-SOURCE INGESTION (Multi-thread)          │
+│  3 MQTT Workers → Unified Queue → +khu_cn, source_name     │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     VALIDATION                              │
+│  Schema (Pydantic) + Range Check + Poison Pill (≥3 lỗi)    │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     DETECT                                  │
+│  Rule-based Threshold + 3-Strike Violation Counter         │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     ALERT                                   │
+│  Telegram Bot / SMTP Email → 3-Strike Violation Alerts     │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     STORAGE (PostgreSQL)                    │
+│  raw_events | violations | alerts  (Batch Insert)          │
+└────────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     DAILY REPORT                            │
+│  Group by khu_cn/device/group → Telegram/Email Report       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -59,315 +77,136 @@ Xử lý stream MQTT, 3 nhóm thiết bị điện/nước/ánh sáng:
 
 ```
 smartcity-iot-pipeline/
-├── main.py              # Entry point — chạy LIVE (kết nối MQTT thật)
-├── baseline.py          # Đo baseline — tốc độ thực tế từ broker trước khi Ingestion
-├── ingest.py            # Chặng Ingestion: nhận MQTT, đẩy queue, lưu raw, log throughput
-├── validate_stage.py    # Chặng Validation: validate schema + range, phân loại valid/invalid
-├── schemas.py           # Pydantic schema theo device_type + range vật lý
-├── replay.py            # Replay data local để test tải tăng dần (10k, 100k)
-├── mor_payload.py       # Script monitor từ mentor (subscribe & in message)
+├── config/
+│   └── sources.yaml          # Config 3 nguồn MQTT (CN A, B, C)
+├── src/
+│   ├── __init__.py
+│   ├── ingest.py             # MultiSourceIngestor (multi-thread)
+│   ├── validate.py           # Validate (Pydantic + range + poison pill)
+│   ├── detect.py             # Detect violations (threshold + 3-strike)
+│   ├── alert.py              # Alert (Telegram/Email)
+│   ├── storage.py            # Postgres batch insert
+│   ├── daily_report.py       # Daily report generator
+│   ├── schemas.py            # Unified schema + khu_cn
+│   ├── baseline.py           # Baseline test
+│   ├── replay.py             # Replay tool
+│   └── mor_payload.py        # Mentor's monitor script
+├── main.py                   # Entry point - orchestrate all stages
+├── config.yaml               # Global config
+├── docker-compose.yml        # 2 containers: app + postgres
 ├── Dockerfile
-├── docker-compose.yml
-└── requirements.txt
-```
-
-**Thư mục output:**
-```
-data/raw/
-├── raw_events_<ts>.jsonl         # Data thô từ MQTT (dùng cho replay)
-logs/
-├── ingest.log                    # Log chặng Ingestion
-├── validate.log                  # Log chặng Validation
-├── summary.json                  # Tổng hợp số liệu
-├── invalid_events.jsonl          # Message không hợp lệ (kèm lý do)
-├── dead_letter.jsonl             # Poison pill (device lỗi ≥3 lần)
-└── replay/
-    ├── replay_10000.log
-    ├── replay_10000_summary.json
-    ├── replay_100000.log
-    └── replay_100000_summary.json
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
 ## 4. Chi tiết từng chặng
 
-### 4.1. Chặng BASELINE — Đo tốc độ thực tế
-
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Script** | `baseline.py` |
-| **Công nghệ** | paho-mqtt,subscribe topic, đếm message |
-| **Data vào** | MQTT message từ broker |
-| **Data ra** | Tổng msg, throughput (msg/s), sample message |
-| **Mục đích** | Xác nhận broker có data, đo tốc độ thực tế trước khi Ingestion |
-
-**Cách chạy:**
-```bash
-python3 baseline.py \
-    --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' --duration 60 --insecure
-```
-
-**Kết quả mong đợi:**
-```
-=== BASELINE RESULT ===
-Total messages: 125,000
-Elapsed: 60.0s
-Throughput: 2,083.3 msg/s
-```
-
-**Nếu total=0:** Broker không có data → Liên hệ mentor bật simulator
+| Chặng | Data vào | Data ra | Công nghệ | Script | Log kết quả |
+|-------|----------|---------|-----------|--------|-------------|
+| **Ingestion** | 3 luồng MQTT (WSS) | JSON + khu_cn vào queue | paho-mqtt multi-thread | `src/ingest.py` | Tổng msg, msg/s, reconnect |
+| **Validation** | JSON từ queue | Valid/Invalid + lý do | Pydantic (UnifiedTelemetry) | `src/validate.py` | Valid/Invalid, top errors |
+| **Detect** | Valid JSON | Violation + streak | Rule-based threshold + 3-strike | `src/detect.py` | Violations, 3-strike alerts |
+| **Alert** | Violation ≥3 streak | Telegram/Email | Telegram Bot API / SMTP | `src/alert.py` | Alerts sent/failed |
+| **Storage** | Events + Alerts | Postgres tables | psycopg2 batch insert | `src/storage.py` | Rows stored, errors |
+| **Daily Report** | Violations DB | JSON/Telegram/Email | SQL aggregation | `src/daily_report.py` | Report file |
 
 ---
 
-### 4.2. Chặng INGESTION
+## 5. Cài đặt & Chạy
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Script** | `ingest.py` |
-| **Công nghệ** | paho-mqtt (WebSocket Secure), queue.Queue (bounded) |
-| **Data vào** | MQTT message từ broker, topic `v1/C001/+/up/telemetry` |
-| **Data ra** | JSON object đẩy vào queue + raw file `.jsonl` |
-| **Log** | `logs/ingest.log` — throughput mỗi 10 giây |
-
-**Logic xử lý:**
-1. Kết nối WSS (TLS, force IPv4)
-2. Subscribe topic `v1/C001/+/up/telemetry`
-3. Nhận message → parse JSON → push vào queue (bounded, maxsize=20000)
-4. Ghi raw message xuống `data/raw/raw_events_<ts>.jsonl`
-5. Log throughput mỗi 10 giây
-6. Xử lý reconnect tự động khi MQTT rớt
-
-**Log output mẫu:**
-```
-[ingestion] INFO [MQTT] CONNECTED
-[ingestion] INFO [MQTT] SUBSCRIBED topic=v1/C001/+/up/telemetry mid=1
-[ingestion] INFO [INGEST] window=10.0s recv=10234 rate=1023.4 msg/s total=10234
-[ingestion] INFO [INGEST] window=10.0s recv=10189 rate=1018.9 msg/s total=20423
-...
-[ingestion] INFO [INGEST] DONE total=125000 elapsed=120.1s avg_rate=1040.8 msg/s
-```
-
----
-
-### 4.3. Chặng VALIDATION
-
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Script** | `validate_stage.py` |
-| **Công nghệ** | Pydantic (schema + range validation) |
-| **Data vào** | JSON object từ queue (do Ingestion đẩy vào) |
-| **Data ra** | Valid / Invalid (kèm lý do lỗi) |
-| **Log** | `logs/validate.log`, `logs/invalid_events.jsonl` |
-
-**Logic validation:**
-1. **Bước 1 — Schema check:** Kiểm tra field bắt buộc, kiểu dữ liệu
-   - `event_id`: string
-   - `device_id`: string
-   - `ts`: int (epoch ms)
-   - `metrics`: dict
-   - `quality`: dict {rssi_dbm, snr_db, latency_ms}
-   - ... (xem `schemas.py`)
-
-2. **Bước 2 — Range check:** Kiểm tra giá trị vật lý theo từng nhóm
-   - **Water:** pH 0-14, pressure 0-50 bar, flow ≥ 0, temperature -10~60°C
-   - **Electricity/Light:** Đang dùng `GenericMetrics` (TODO khi có sample)
-
-3. **Phân loại kết quả:**
-   - `valid`: Message hợp lệ → đẩy sang Detect (giai đoạn 3)
-   - `schema_error`: Thiếu field hoặc sai kiểu dữ liệu
-   - `range_error`: Giá trị ngoài range vật lý hợp lệ
-
-4. **Poison pill handling:** Device nào lỗi liên tục ≥3 lần → đẩy sang `dead_letter.jsonl`
-
-**Log output mẫu:**
-```
-[validation] INFO [VALIDATE] window=10.0s valid=10089 invalid=145 rate=1023.3 msg/s total_valid=10089 total_invalid=145
-...
-[validation] INFO [VALIDATE] DONE total=125000 valid=123100 invalid=1900 error_rate=1.52% avg_rate=1040.7 msg/s elapsed=120.1s top_errors={'range_error': 1900}
-```
-
-**File output:**
-- `logs/invalid_events.jsonl` — Message lỗi + lý do chi tiết
-- `logs/dead_letter.jsonl` — Poison pill (device lỗi ≥3 lần liên tiếp)
-
----
-
-## 5. Hướng dẫn chạy — Thứ tự thực hiện
-
-### Bước 1: Verify kết nối broker
+### Cài đặt
 
 ```bash
-# Test baseline 60 giây — kiểm tra broker có data không
-python3 baseline.py \
-    --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' --duration 60 --insecure
+# Clone
+git clone <repo-url>
+cd smartcity-iot-pipeline
+
+# Tạo venv
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate  # Windows
+
+# Cài đặt dependencies
+pip install -r requirements.txt
 ```
 
-**Kết quả:**
-- `total=0` → Broker không có data → Liên hệ mentor bật simulator
-- `total>0` → Broker có data → Tiếp tục Bước 2
-
----
-
-### Bước 2: Chạy LIVE 20 phút — Thu data local
+### Chạy Pipeline (Local)
 
 ```bash
-python3 main.py \
-    --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' --duration 1200 --insecure
+# 1. Cấu hình sources (chỉnh sửa config/sources.yaml)
+# 2. Chạy pipeline 20 phút
+python main.py --config config/sources.yaml --duration 1200
 ```
 
-**Kết quả:**
-- `logs/ingest.log` — Log Ingestion
-- `logs/validate.log` — Log Validation
-- `logs/summary.json` — Tổng hợp số liệu
-- `data/raw/raw_events_<ts>.jsonl` — Data thô (dùng cho replay)
-- `logs/invalid_events.jsonl` — Message lỗi
-- `logs/dead_letter.jsonl` — Poison pill
-
----
-
-### Bước 3: Kiểm tra kết quả
+### Chạy với Docker
 
 ```bash
-# Xem tổng hợp
-cat logs/summary.json
+# Build & chạy
+docker compose up --build
 
-# Xem chi tiết Ingestion
-cat logs/ingest.log | tail -5
+# Chạy nền
+docker compose up --build -d
 
-# Xem chi tiết Validation
-cat logs/validate.log | tail -5
+# Xem logs
+docker compose logs -f app
 
-# Xem message lỗi (10 dòng đầu)
-head -10 logs/invalid_events.jsonl
-```
-
-**Mentor yêu cầu gửi:**
-- Code (toàn bộ file)
-- Log (`ingest.log`, `validate.log`)
-- Kết quả (`summary.json`)
-
----
-
-### Bước 4: Test replay tuần tự
-
-```bash
-# Hoàn thành 10k trước, rồi mới chạy 100k
-python3 replay.py --input data/raw/raw_events_<ts>.jsonl --target 10000
-python3 replay.py --input data/raw/raw_events_<ts>.jsonl --target 100000
+# Dừng
+docker compose down
 ```
 
 ---
 
 ## 6. Kết quả mong đợi (sau 20 phút)
 
-### Ingestion
-
-| Metric | Giá trị |
-|--------|---------|
-| Total messages | ~125,000 (tùy tốc độ broker) |
-| Avg throughput | ~1,040 msg/s |
-| Elapsed | 120s |
-| Raw file | `data/raw/raw_events_<ts>.jsonl` |
-
-### Validation
-
-| Metric | Giá trị |
-|--------|---------|
-| Total processed | ~125,000 |
-| Valid | ~123,100 (98.5%) |
-| Invalid | ~1,900 (1.5%) |
-| Top error | range_error |
-| Invalid file | `logs/invalid_events.jsonl` |
+| Chặng | Metric | Target |
+|-------|--------|--------|
+| **Ingestion** | Total messages | ~240,000 (3 sources × 2k msg/s × 1200s) |
+| | Avg throughput | ~2,000 msg/s per source |
+| **Validation** | Valid rate | >99% |
+| | Invalid rate | <1% |
+| **Detect** | Violations detected | Theo ngưỡng nghiệp vụ |
+| **Alert** | 3-strike alerts | Số device vi phạm ≥3 lần liên tiếp |
+| **Storage** | Rows stored | Events + Violations + Alerts |
 
 ---
 
-## 7. Test throughput theo yêu cầu mentor
+## 7. Log Output
 
-Mentor yêu cầu test ở 3 mức: **2k, 500k, 1M msg/s**
-
-### 2k msg/s (target hiện tại)
-
-```bash
-# Chạy LIVE 20 phút — broker cần publish ~2k msg/s
-python3 main.py \
-    --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' --duration 1200 --insecure
 ```
-
-### 500k–1M msg/s (scale lý thuyết)
-
-**Lưu ý:** Không thể test 500k/1M msg/s trên máy local — cần:
-- Kafka/Redpanda (partition theo device_id)
-- Cluster nhiều node
-- ClickHouse/TimescaleDB cho storage
-
-Chi tiết ở Addendum (giai đoạn sau).
-
----
-
-## 8. Validation kiểm tra những gì?
-
-| Loại lỗi | Mô tả | Ví dụ |
-|-----------|-------|-------|
-| `schema_error` | Thiếu field bắt buộc hoặc sai kiểu dữ liệu | Thiếu `device_id`, `ts` không phải int |
-| `range_error` | Giá trị ngoài range vật lý hợp lệ | pH = 15, pressure = -1, temperature = 100°C |
-
-**Lưu ý:** Đây là kiểm tra **schema + range vật lý**, KHÔNG phải ngưỡng vi phạm nghiệp vụ.
-
----
-
-## 9. Cài đặt & Chạy Docker
-
-```bash
-# Cài đặt
-pip install -r requirements.txt
-
-# Chạy trực tiếp
-python3 main.py --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' --duration 1200 --insecure
-
-# Hoặc Docker
-docker compose up --build
+logs/
+├── pipeline.log              # Tổng log
+├── ingest.log                # Ingestion (per source)
+├── validate.log              # Validation stats
+├── detect.log                # Detection stats
+├── alert.log                 # Alert stats
+├── storage.log               # Storage stats
+├── invalid_events.jsonl      # Invalid messages
+├── dead_letter.jsonl         # Poison pill
+└── summary.json              # Tổng hợp
 ```
 
 ---
 
-## 10. Debug — Kiểm tra kết nối
+## 8. Scale lên 500k–1M msg/s (Giai đoạn sau)
 
-Nếu không nhận được data:
-
-```bash
-# Chạy baseline test
-python3 baseline.py \
-    --host dathoc.net --port 443 --ws-path /mq \
-    --username test1 --password '123456' \
-    --topic 'v1/C001/+/up/telemetry' --duration 30 --insecure
-```
-
-**Kết quả:**
-- `CONNECTED` + `SUBSCRIBED` + `total=0` → Broker không có data
-- `CONNECT FAILED` → Lỗi kết nối网络
-- `SSL error` → Thêm flag `--insecure`
+Khi cần scale thật, dùng tool có sẵn:
+- **Kafka/Redpanda** - Message bus, partition theo device_id
+- **Redis** - State phân tán (violation counter, checkpoint)
+- **ClickHouse/TimescaleDB** - Time-series DB cho query lớn
+- **Kubernetes** - Orchestrate multi-replica ingestion
 
 ---
 
-## 11. Bài toán 2 (Video)
+## 9. Bài toán 2 (Video)
 
 Triển khai sau khi bài 1 được duyệt.
 
 ---
 
-## 12. Đã nhận từ mentor
+## 10. Liên hệ
 
-- Giữ tự chủ động code và tự tìm vấn đề trước khi hỏi lại
-- Bắt đầu ở ~1k msg/s, tăng dần bằng cách replay data local
-- Không tự dựng logic song song/worker tay
+**Nguyễn Đình Tấn Lộc**  
+Email: ndtl05062005@gmail.com  
+GitHub: https://github.com/nguyendinhtanloc-Org/smartcity-iot-pipeline
