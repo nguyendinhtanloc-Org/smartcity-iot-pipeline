@@ -1,11 +1,4 @@
 """
-consume_and_validate.py
-------------------------
-Đây là phần CODE THẬT của mình theo đúng yêu cầu mentor: KHÔNG code lại
-multi-worker/gộp luồng (đã giao cho Telegraf) — chỉ code logic
-kiểm tra data đúng/sai (validate), TÁI SỬ DỤNG nguyên functions
-detect_type_from_topic() và validate_event() đã có sẵn trong schemas.py.
-
 Input: file JSONL do Telegraf ghi ra (đã gộp cả 3 khu CN A/B/C)
 Output: log valid/invalid, giống hệt behavior cũ của src/validate.py
 """
