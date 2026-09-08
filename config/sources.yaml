@@ -1,5 +1,6 @@
-# config/sources.yaml - GIẢ ĐỊNH (sẽ sửa khi mentor cấp config thật)
-# Multi-source MQTT configuration for 3 Industrial Zones
+# config/sources.yaml
+# 3 nguồn MQTT — tất cả cùng subscribe C001 (broker hiện chỉ có C001 data)
+# Mỗi nguồn có tên riêng để chứng minh 3 workers chạy song song
 
 mqtt_sources:
   - name: "CN_A"
@@ -24,13 +25,13 @@ mqtt_sources:
     ws_path: "/mq"
     username: "test1"
     password: "123456"
-    company_id: "C002"
+    company_id: "C001"
     gateways:
       - "electricity"
       - "water"
       - "lighting"
     khu_cn: "B"
-    topic: "v1/C002/+/up/telemetry"
+    topic: "v1/C001/+/up/telemetry"
     qos: 0
     client_id: null
 
@@ -40,13 +41,13 @@ mqtt_sources:
     ws_path: "/mq"
     username: "test1"
     password: "123456"
-    company_id: "C003"
+    company_id: "C001"
     gateways:
       - "electricity"
       - "water"
       - "lighting"
     khu_cn: "C"
-    topic: "v1/C003/+/up/telemetry"
+    topic: "v1/C001/+/up/telemetry"
     qos: 0
     client_id: null
 
@@ -55,5 +56,7 @@ global:
   queue_maxsize: 20000
   reconnect_delay: 5
   checkpoint_interval: 1000
+  report_interval: 10
+  raw_flush_lines: 1000
   log_level: "INFO"
   client_id_prefix: "ingest"
