@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import queue
 import threading
 import time
@@ -34,13 +35,13 @@ class Storage:
         self.batch_size = batch_size
         self.flush_interval = flush_interval
         
-        # DB config
+        # DB config - read from env or use defaults
         self.db_config = db_config or {
-            "host": "localhost",
-            "port": 5432,
-            "database": "smartcity",
-            "user": "postgres",
-            "password": "postgres",
+            "host": os.environ.get("DB_HOST", "localhost"),
+            "port": int(os.environ.get("DB_PORT", 5432)),
+            "database": os.environ.get("DB_NAME", "smartcity"),
+            "user": os.environ.get("DB_USER", "postgres"),
+            "password": os.environ.get("DB_PASSWORD", "postgres"),
         }
         
         self.conn: Optional[psycopg2.extensions.connection] = None
@@ -57,8 +58,13 @@ class Storage:
     def run(self):
         """Chạy storage loop"""
         self.running = True
-        self._connect()
-        self._init_tables()
+        try:
+            self._connect()
+            self._init_tables()
+            logger.info("Storage started with DB connection")
+        except Exception as e:
+            logger.warning(f"Storage started WITHOUT DB: {e}")
+            self.conn = None
         logger.info("Storage started")
         
         while self.running:
@@ -79,11 +85,15 @@ class Storage:
                 msg_type, payload = item
                 if msg_type == "alert":
                     self._buffer_alert(payload)
+                elif msg_type == "violation":
+                    self._buffer_violation(payload)
                 else:
                     self._buffer_event(payload)
             else:
                 # Direct payload
                 self._buffer_event(item)
+            
+            self._maybe_log_window()
         
         self._finalize()
         logger.info("Storage stopped")
@@ -116,12 +126,13 @@ class Storage:
     def _init_tables(self):
         """Khởi tạo bảng"""
         with self._cursor() as cur:
-            # Raw events table
+            # Raw events table - DROP and recreate if exists with wrong schema
+            cur.execute("DROP TABLE IF EXISTS raw_events CASCADE")
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS raw_events (
+                CREATE TABLE raw_events (
                     id BIGSERIAL PRIMARY KEY,
-                    dev_id VARCHAR(100) NOT NULL,
-                    khu_cn VARCHAR(10) NOT NULL,
+                    dev_id VARCHAR(100),
+                    khu_cn VARCHAR(10),
                     source_name VARCHAR(50),
                     ts VARCHAR(50),
                     tsunix BIGINT,
@@ -187,19 +198,32 @@ class Storage:
         if len(self.buffer) >= self.batch_size:
             self._flush()
     
+    def _buffer_violation(self, violation: Dict):
+        """Buffer violation"""
+        self.buffer.append(("violation", violation))
+        if len(self.buffer) >= self.batch_size:
+            self._flush()
+    
     def _flush(self):
         """Flush buffer to database"""
         if not self.buffer:
             return
         
+        if self.conn is None:
+            self.buffer.clear()
+            return
+        
         events = [item for item in self.buffer if item[0] == "event"]
         alerts = [item for item in self.buffer if item[0] == "alert"]
+        violations = [item for item in self.buffer if item[0] == "violation"]
         
         try:
             if events:
                 self._insert_events(events)
             if alerts:
                 self._insert_alerts(alerts)
+            if violations:
+                self._insert_violations(violations)
             
             self.conn.commit()
             self.total_stored += len(self.buffer)
@@ -223,12 +247,22 @@ class Storage:
         with self._cursor() as cur:
             data = []
             for _, payload in events:
+                # Sanitize tsunix - convert non-numeric to None
+                tsunix = payload.get("tsunix")
+                if isinstance(tsunix, str) and not tsunix.replace(".", "").isdigit():
+                    tsunix = None
+                
+                # Sanitize dev_id - blank/whitespace to None
+                dev_id = payload.get("dev_id")
+                if isinstance(dev_id, str):
+                    dev_id = dev_id.strip() or None
+                
                 data.append((
-                    payload.get("dev_id"),
+                    dev_id,
                     payload.get("khu_cn"),
                     payload.get("source_name"),
                     payload.get("ts"),
-                    payload.get("tsunix"),
+                    tsunix,
                     payload.get("received_at"),
                     json.dumps(payload),
                 ))
@@ -260,6 +294,38 @@ class Storage:
                 INSERT INTO alerts (alert_type, dev_id, khu_cn, group_name, streak, payload, sent_channels)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, data)
+    
+    def _insert_violations(self, violations: List):
+        """Insert violations batch"""
+        if not violations:
+            return
+        
+        with self._cursor() as cur:
+            data = []
+            for _, violation in violations:
+                # Extract violation details
+                details = violation.get("violations", [])
+                streak = violation.get("streak", 0)
+                for v in details:
+                    data.append((
+                        v.get("device_id") or violation.get("device_id"),
+                        v.get("khu_cn") or violation.get("khu_cn"),
+                        v.get("group") or violation.get("group"),
+                        violation.get("type", "THRESHOLD"),
+                        v.get("field"),
+                        v.get("value"),
+                        v.get("min"),
+                        v.get("max"),
+                        v.get("unit"),
+                        streak,
+                        json.dumps(violation),
+                    ))
+            
+            if data:
+                execute_batch(cur, """
+                    INSERT INTO violations (dev_id, khu_cn, group_name, violation_type, field_name, value, min_threshold, max_threshold, unit, streak, payload)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, data)
     
     def _maybe_log_window(self):
         now = time.monotonic()

@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from schemas import UnifiedTelemetry
+from schemas import UnifiedTelemetry, detect_type_from_topic
 
 logger = logging.getLogger("detect")
 
@@ -26,21 +26,33 @@ logger = logging.getLogger("detect")
 
 THRESHOLDS = {
     "electricity": {
-        "U": {"min": 180, "max": 250, "unit": "V", "name": "Điện áp"},
-        "I": {"min": 0, "max": 100, "unit": "A", "name": "Dòng điện"},
-        "Power_kW": {"min": 0, "max": 50, "unit": "kW", "name": "Công suất"},
-        "Energy_kwh": {"min": 0, "max": 100000, "unit": "kWh", "name": "Năng lượng"},
+        "Uab": {"min": 180, "max": 260, "unit": "V", "name": "Điện áp pha AB"},
+        "Ubc": {"min": 180, "max": 260, "unit": "V", "name": "Điện áp pha BC"},
+        "Uca": {"min": 180, "max": 260, "unit": "V", "name": "Điện áp pha CA"},
+        "Ia": {"min": 0, "max": 100, "unit": "A", "name": "Dòng pha A"},
+        "Ib": {"min": 0, "max": 100, "unit": "A", "name": "Dòng pha B"},
+        "Ic": {"min": 0, "max": 100, "unit": "A", "name": "Dòng pha C"},
+        "P_Total": {"min": 0, "max": 50, "unit": "kW", "name": "Công suất tổng"},
+        "F": {"min": 45, "max": 55, "unit": "Hz", "name": "Tần số"},
+        "PFavg": {"min": -1, "max": 1, "unit": "", "name": "Hệ số công suất"},
+        "THD_Vab": {"min": 0, "max": 8, "unit": "%", "name": "THD điện áp"},
+        "THD_Ia": {"min": 0, "max": 8, "unit": "%", "name": "THD dòng A"},
     },
     "water": {
-        "flow_m3_h": {"min": 0, "max": 100, "unit": "m3/h", "name": "Lưu lượng"},
-        "pressure_bar": {"min": 0, "max": 10, "unit": "bar", "name": "Áp suất"},
-        "ph": {"min": 6.5, "max": 8.5, "unit": "pH", "name": "Độ pH"},
-        "turbidity_ntu": {"min": 0, "max": 5, "unit": "NTU", "name": "Độ đục"},
+        "Qt": {"min": 0, "max": 100, "unit": "m3/h", "name": "Lưu lượng"},
+        "V": {"min": 0, "max": 1000000, "unit": "m3", "name": "Tổng lưu lượng"},
     },
     "lighting": {
+        "U": {"min": 180, "max": 260, "unit": "V", "name": "Điện áp"},
+        "I": {"min": 0, "max": 100, "unit": "A", "name": "Dòng điện"},
         "Power_kW": {"min": 0, "max": 10, "unit": "kW", "name": "Công suất đèn"},
-        "Lux": {"min": 0, "max": 10000, "unit": "lux", "name": "Độ sáng"},
-    }
+        "Energy_kwh": {"min": 0, "max": 100000, "unit": "kWh", "name": "Năng lượng"},
+    },
+    "wastewater": {
+        "Qt": {"min": 0, "max": 500, "unit": "m3/h", "name": "Lưu lượng nước thải"},
+        "pH": {"min": 4, "max": 10, "unit": "", "name": "pH"},
+        "turbidity": {"min": 0, "max": 100, "unit": "NTU", "name": "Độ đục"},
+    },
 }
 
 
@@ -103,15 +115,22 @@ class Detector:
         logger.info("Detector stopped")
     
     def _get_group(self, payload: dict) -> str:
-        """Xác định group từ payload"""
-        # Dựa trên các field đặc trưng
-        if "flow_m3_h" in payload or "pressure_bar" in payload:
+        """Xác định group từ data_type hoặc field"""
+        # Use data_type if available
+        data_type = payload.get("data_type", "")
+        if data_type in ("water", "lighting", "electricity"):
+            return data_type
+        
+        # Fallback: detect from fields
+        if "Qt" in payload or "V" in payload:
             return "water"
-        elif "U" in payload and "I" in payload:
-            return "electricity"
-        elif "Lux" in payload:
+        elif "Lux" in payload or "Contactor" in payload:
             return "lighting"
-        return "electricity"  # default
+        elif "Uab" in payload or "P_Total" in payload:
+            return "electricity"
+        elif "U" in payload and "I" in payload:
+            return "lighting"  # Lighting has U, I, Power_kW
+        return "unknown"
     
     def _check_thresholds(self, payload: dict, group: str) -> list:
         """Kiểm tra ngưỡng, trả về list vi phạm"""
@@ -123,10 +142,14 @@ class Detector:
             if value is None:
                 continue
             
+            # Skip non-numeric values (e.g. "NOT_A_NUMBER")
+            if isinstance(value, str):
+                continue
+            
             # Handle nested Lux object
             if field == "Lux" and isinstance(value, dict):
                 for k, v in value.items():
-                    if v is not None and (v < limits["min"] or v > limits["max"]):
+                    if v is not None and isinstance(v, (int, float)) and (v < limits["min"] or v > limits["max"]):
                         violations.append({
                             "field": f"{field}.{k}",
                             "value": v,
@@ -147,6 +170,38 @@ class Detector:
                         "unit": limits["unit"],
                         "name": limits["name"],
                     })
+        
+        # Phase imbalance check (electricity only)
+        if group == "electricity":
+            violations.extend(self._check_phase_imbalance(payload))
+        
+        return violations
+    
+    def _check_phase_imbalance(self, payload: dict) -> list:
+        """Kiểm tra mất cân pha (current imbalance)"""
+        violations = []
+        ia = payload.get("Ia")
+        ib = payload.get("Ib")
+        ic = payload.get("Ic")
+        
+        if not all(isinstance(v, (int, float)) for v in [ia, ib, ic]):
+            return violations
+        
+        avg = (ia + ib + ic) / 3
+        if avg == 0:
+            return violations
+        
+        for name, val in [("Ia", ia), ("Ib", ib), ("Ic", ic)]:
+            imbalance_pct = abs(val - avg) / avg * 100
+            if imbalance_pct > 20:
+                violations.append({
+                    "field": f"{name}_imbalance",
+                    "value": round(imbalance_pct, 1),
+                    "min": 0,
+                    "max": 20,
+                    "unit": "%",
+                    "name": f"Mất cân pha {name}",
+                })
         
         return violations
     

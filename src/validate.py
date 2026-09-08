@@ -15,7 +15,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from schemas import validate_event, UnifiedTelemetry, ValidationResult
+from schemas import validate_event, ValidationResult
 
 logger = logging.getLogger("validation")
 
@@ -41,8 +41,8 @@ class Validator:
         self.device_error_streak: Counter = Counter()
         self.RETRY_LIMIT = 3
         
-        self._invalid_file = open(self.invalid_path, "a", encoding="utf-8")
-        self._dead_letter_file = open(self.dead_letter_path, "a", encoding="utf-8")
+        self._invalid_file = open(self.invalid_path, "a", encoding="utf-8", buffering=1)
+        self._dead_letter_file = open(self.dead_letter_path, "a", encoding="utf-8", buffering=1)
         
         self.window_valid = 0
         self.window_invalid = 0
@@ -73,8 +73,8 @@ class Validator:
         logger.info("Validator stopped")
     
     def _process(self, topic: str, payload: dict):
-        # Validate với UnifiedTelemetry (có khu_cn, source_name)
-        result = validate_event(payload, UnifiedTelemetry)
+        # Validate - auto-detect type from topic
+        result = validate_event(payload)
         
         if result.is_valid:
             self.valid_count += 1
