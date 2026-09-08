@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import queue
 import threading
 import time
@@ -24,7 +25,8 @@ from src.validate import Validator
 from src.detect import Detector
 from src.alert import Alerter
 from src.storage import Storage
-from src.schemas import UnifiedTelemetry, validate_event
+from src.daily_report import DailyReportGenerator
+from schemas import UnifiedTelemetry, validate_event
 
 BASE_DIR = Path(__file__).parent
 LOG_DIR = BASE_DIR / "logs"
@@ -49,16 +51,18 @@ def setup_logging(log_level: str = "INFO"):
         ("storage", "storage.log"),
     ]:
         logger = logging.getLogger(name)
-        handler = logging.FileHandler(LOG_DIR / filename, encoding="utf-8")
-        handler.setFormatter(logging.Formatter(fmt))
-        logger.addHandler(handler)
+        # Tránh thêm handler trùng lặp nếu setup_logging được gọi nhiều lần
+        if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
+            handler = logging.FileHandler(LOG_DIR / filename, encoding="utf-8")
+            handler.setFormatter(logging.Formatter(fmt))
+            logger.addHandler(handler)
 
 
 def main():
     parser = argparse.ArgumentParser(description="SmartCity IoT Pipeline - Multi-Source")
     parser.add_argument("--config", default="config/sources.yaml", help="Config file YAML")
     parser.add_argument("--duration", type=int, default=1200, help="Thời gian chạy (giây)")
-    parser.add_argument("--queue-maxsize", type=int, default=20000, help="Queue max size")
+    parser.add_argument("--queue-maxsize", type=int, default=100000, help="Queue max size")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     args = parser.parse_args()
 
@@ -83,9 +87,10 @@ def main():
 
     # Khởi tạo các component
     ingestor = MultiSourceIngestor(
-        sources_config=[],  # sẽ load trong run
+        sources_config=sources,
         global_config=global_config,
-        out_queue=ingest_queue
+        out_queue=ingest_queue,
+        raw_dir=RAW_DIR,
     )
 
     # Validator
@@ -113,10 +118,6 @@ def main():
         in_queue=alert_queue
     )
 
-    # Setup logging
-    setup_logging("INFO")
-    logger = logging.getLogger("pipeline")
-
     logger.info("=" * 60)
     logger.info("SMARTCITY IOT PIPELINE STARTING")
     logger.info("=" * 60)
@@ -126,15 +127,6 @@ def main():
 
     # 1. Ingestion (multi-source)
     def run_ingestion():
-        # Load sources config internally
-        import yaml
-        with open("config/sources.yaml", "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-        sources = config.get("mqtt_sources", [])
-        global_cfg = config.get("global", {})
-        global_cfg["queue_maxsize"] = args.queue_maxsize
-        
-        ingestor = MultiSourceIngestor(sources, global_cfg, ingest_queue)
         ingestor.run(duration_seconds=args.duration)
     
     ingest_thread = threading.Thread(target=run_ingestion, daemon=True)
@@ -164,6 +156,17 @@ def main():
     # Wait for ingestion to complete
     ingest_thread.join()
 
+    # Ghi summary riêng cho chặng INGESTION
+    ingest_summary = ingestor.summary_dict()
+    ingest_summary["started_at"] = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(time.time() - args.duration)
+    )
+    ingest_summary["ended_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    ingest_summary["config_file"] = args.config
+    with open(BASE_DIR / "logs" / "ingest_summary.json", "w", encoding="utf-8") as f:
+        json.dump(ingest_summary, f, ensure_ascii=False, indent=2)
+    logger.info("Ingestion summary saved: logs/ingest_summary.json")
+
     # Signal downstream to finish
     ingest_queue.put(None)  # Poison pill for validator
     
@@ -184,13 +187,40 @@ def main():
 
     logger.info("All pipeline stages completed")
 
-    # Summary
+    # Summary - tất cả các stage
     summary = {
         "run_timestamp": time.strftime("%Y%m%d_%H%M%S"),
         "duration_seconds": args.duration,
         "pipeline_stages": ["ingestion", "validation", "detection", "alert", "storage"],
+        "ingestion": ingest_summary,
+        "validation": validator.summary_dict(),
+        "detection": detector.summary_dict(),
+        "alert": alerter.summary_dict(),
+        "storage": storage.summary_dict(),
     }
 
+    with open(BASE_DIR / "logs" / "summary.json", "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+
+    # Generate daily report (nếu có DB)
+    try:
+        report_gen = DailyReportGenerator(
+            db_config={
+                "host": os.environ.get("DB_HOST", "localhost"),
+                "port": int(os.environ.get("DB_PORT", 5432)),
+                "database": os.environ.get("DB_NAME", "smartcity"),
+                "user": os.environ.get("DB_USER", "postgres"),
+                "password": os.environ.get("DB_PASSWORD", "postgres"),
+            },
+            output_dir=str(BASE_DIR / "reports"),
+        )
+        report = report_gen.generate_daily_report()
+        summary["daily_report"] = report
+        logger.info("Daily report generated")
+    except Exception as e:
+        logger.warning(f"Daily report generation skipped: {e}")
+
+    # Rewrite summary with daily report
     with open(BASE_DIR / "logs" / "summary.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
