@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import argparse
+import json
+import os
 import socket
 import ssl
 import sys
@@ -60,9 +62,12 @@ def build_topic_filter(company_id: str, gateway: str | None) -> str:
 
 received = 0
 received_bytes = 0
+out_file = None
 
 
 def on_connect(client, userdata, flags, rc, properties=None):
+    global out_file
+
     topic = userdata["topic"]
 
     if rc == 0:
@@ -78,6 +83,12 @@ def on_connect(client, userdata, flags, rc, properties=None):
             )
         else:
             print(f"[MQTT] SUBSCRIBE SENT mid={mid}", flush=True)
+
+        output_path = userdata.get("output")
+        if output_path:
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+            out_file = open(output_path, "a", encoding="utf-8")
+            print(f"[FILE] Writing to {output_path}", flush=True)
     else:
         print(f"[MQTT] CONNECT FAILED rc={rc}", file=sys.stderr, flush=True)
 
@@ -90,11 +101,16 @@ def on_subscribe(client, userdata, mid, granted_qos, properties=None):
 
 
 def on_disconnect(client, userdata, rc, properties=None, reason_code=None):
+    global out_file
     print(f"[MQTT] DISCONNECTED rc={rc}", flush=True)
+    if out_file:
+        out_file.close()
+        out_file = None
+        print("[FILE] Closed output file", flush=True)
 
 
 def on_message(client, userdata, msg):
-    global received, received_bytes
+    global received, received_bytes, out_file
 
     received += 1
     received_bytes += len(msg.payload)
@@ -108,6 +124,22 @@ def on_message(client, userdata, msg):
         f"[MQTT] {msg.topic} | {payload}",
         flush=True,
     )
+
+    if out_file:
+        try:
+            record = {
+                "topic": msg.topic,
+                "ts": now_local(),
+                "received_at": int(time.time()),
+            }
+            try:
+                record["payload"] = json.loads(payload)
+            except json.JSONDecodeError:
+                record["payload_raw"] = payload
+            out_file.write(json.dumps(record, ensure_ascii=False) + "\n")
+            out_file.flush()
+        except Exception as e:
+            print(f"[FILE] WRITE ERROR: {e}", file=sys.stderr, flush=True)
 
 
 # ============================================================
@@ -212,6 +244,13 @@ def main() -> int:
         ),
     )
 
+    parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help="output JSONL file path (e.g. data/raw/real_data.jsonl). If omitted, console only.",
+    )
+
     args = parser.parse_args()
 
     # --------------------------------------------------------
@@ -259,6 +298,7 @@ def main() -> int:
         "userdata": {
             "topic": topic,
             "qos": args.qos,
+            "output": args.output,
         },
         "callback_api_version": mqtt.CallbackAPIVersion.VERSION2,
     }
@@ -327,6 +367,9 @@ def main() -> int:
             client.disconnect()
         except Exception:
             pass
+        if out_file:
+            out_file.close()
+            out_file = None
 
     return 0
 
