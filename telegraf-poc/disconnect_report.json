@@ -1,0 +1,1357 @@
+{
+  "connection_lost_events": [
+    {
+      "epoch": 1789045870,
+      "time_utc": "2026-09-10T13:11:10+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 94493,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789045915,
+            1789045918
+          ],
+          "local_rate_msg_per_sec": 1032.3,
+          "estimated_lost": 3095
+        },
+        "B": {
+          "n_records_in_window": 28094,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045916,
+            1789045920
+          ],
+          "local_rate_msg_per_sec": 471.3,
+          "estimated_lost": 1884
+        },
+        "C": {
+          "n_records_in_window": 42847,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789045871,
+            1789045874
+          ],
+          "local_rate_msg_per_sec": 426.1,
+          "estimated_lost": 1277
+        }
+      }
+    },
+    {
+      "epoch": 1789045871,
+      "time_utc": "2026-09-10T13:11:11+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 93393,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789045915,
+            1789045918
+          ],
+          "local_rate_msg_per_sec": 1026.6,
+          "estimated_lost": 3078
+        },
+        "B": {
+          "n_records_in_window": 27686,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045916,
+            1789045920
+          ],
+          "local_rate_msg_per_sec": 466.2,
+          "estimated_lost": 1863
+        },
+        "C": {
+          "n_records_in_window": 42559,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789045871,
+            1789045874
+          ],
+          "local_rate_msg_per_sec": 421.2,
+          "estimated_lost": 1262
+        }
+      }
+    },
+    {
+      "epoch": 1789045932,
+      "time_utc": "2026-09-10T13:12:12+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 44371,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045932,
+            1789045936
+          ],
+          "local_rate_msg_per_sec": 775.6,
+          "estimated_lost": 3101
+        },
+        "B": {
+          "n_records_in_window": 28500,
+          "max_gap_sec": 12,
+          "gap_between": [
+            1789045954,
+            1789045966
+          ],
+          "local_rate_msg_per_sec": 230.3,
+          "estimated_lost": 2762
+        },
+        "C": {
+          "n_records_in_window": 36785,
+          "max_gap_sec": 5,
+          "gap_between": [
+            1789045954,
+            1789045959
+          ],
+          "local_rate_msg_per_sec": 353.6,
+          "estimated_lost": 1766
+        }
+      }
+    },
+    {
+      "epoch": 1789045954,
+      "time_utc": "2026-09-10T13:12:34+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 24479,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045932,
+            1789045936
+          ],
+          "local_rate_msg_per_sec": 653.2,
+          "estimated_lost": 2611
+        },
+        "B": {
+          "n_records_in_window": 30819,
+          "max_gap_sec": 12,
+          "gap_between": [
+            1789045954,
+            1789045966
+          ],
+          "local_rate_msg_per_sec": 170.3,
+          "estimated_lost": 2042
+        },
+        "C": {
+          "n_records_in_window": 22021,
+          "max_gap_sec": 5,
+          "gap_between": [
+            1789045954,
+            1789045959
+          ],
+          "local_rate_msg_per_sec": 300.6,
+          "estimated_lost": 1501
+        }
+      }
+    },
+    {
+      "epoch": 1789045955,
+      "time_utc": "2026-09-10T13:12:35+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 23270,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045932,
+            1789045936
+          ],
+          "local_rate_msg_per_sec": 654.1,
+          "estimated_lost": 2615
+        },
+        "B": {
+          "n_records_in_window": 31276,
+          "max_gap_sec": 12,
+          "gap_between": [
+            1789045954,
+            1789045966
+          ],
+          "local_rate_msg_per_sec": 167.5,
+          "estimated_lost": 2009
+        },
+        "C": {
+          "n_records_in_window": 21632,
+          "max_gap_sec": 5,
+          "gap_between": [
+            1789045954,
+            1789045959
+          ],
+          "local_rate_msg_per_sec": 300.0,
+          "estimated_lost": 1498
+        }
+      }
+    },
+    {
+      "epoch": 1789046015,
+      "time_utc": "2026-09-10T13:13:35+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 40068,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045983,
+            1789045987
+          ],
+          "local_rate_msg_per_sec": 195.5,
+          "estimated_lost": 781
+        },
+        "B": {
+          "n_records_in_window": 50590,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046018,
+            1789046021
+          ],
+          "local_rate_msg_per_sec": 258.8,
+          "estimated_lost": 775
+        },
+        "C": {
+          "n_records_in_window": 26221,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045984,
+            1789045988
+          ],
+          "local_rate_msg_per_sec": 181.6,
+          "estimated_lost": 725
+        }
+      }
+    },
+    {
+      "epoch": 1789046033,
+      "time_utc": "2026-09-10T13:13:53+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 42583,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045983,
+            1789045987
+          ],
+          "local_rate_msg_per_sec": 238.2,
+          "estimated_lost": 951
+        },
+        "B": {
+          "n_records_in_window": 50897,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046018,
+            1789046021
+          ],
+          "local_rate_msg_per_sec": 273.3,
+          "estimated_lost": 818
+        },
+        "C": {
+          "n_records_in_window": 24409,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789045984,
+            1789045988
+          ],
+          "local_rate_msg_per_sec": 118.1,
+          "estimated_lost": 471
+        }
+      }
+    },
+    {
+      "epoch": 1789046045,
+      "time_utc": "2026-09-10T13:14:05+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 48779,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046003,
+            1789046006
+          ],
+          "local_rate_msg_per_sec": 325.8,
+          "estimated_lost": 976
+        },
+        "B": {
+          "n_records_in_window": 45174,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046018,
+            1789046021
+          ],
+          "local_rate_msg_per_sec": 277.9,
+          "estimated_lost": 832
+        },
+        "C": {
+          "n_records_in_window": 23404,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046018,
+            1789046022
+          ],
+          "local_rate_msg_per_sec": 174.7,
+          "estimated_lost": 697
+        }
+      }
+    },
+    {
+      "epoch": 1789046099,
+      "time_utc": "2026-09-10T13:14:59+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 55936,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 369.1,
+          "estimated_lost": 1106
+        },
+        "B": {
+          "n_records_in_window": 64114,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046045,
+            1789046048
+          ],
+          "local_rate_msg_per_sec": 398.4,
+          "estimated_lost": 1194
+        },
+        "C": {
+          "n_records_in_window": 47886,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 203.0,
+          "estimated_lost": 607
+        }
+      }
+    },
+    {
+      "epoch": 1789046110,
+      "time_utc": "2026-09-10T13:15:10+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 54012,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 445.2,
+          "estimated_lost": 1334
+        },
+        "B": {
+          "n_records_in_window": 73103,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 368.9,
+          "estimated_lost": 1105
+        },
+        "C": {
+          "n_records_in_window": 43064,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 198.0,
+          "estimated_lost": 593
+        }
+      }
+    },
+    {
+      "epoch": 1789046130,
+      "time_utc": "2026-09-10T13:15:30+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 63243,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 552.6,
+          "estimated_lost": 1656
+        },
+        "B": {
+          "n_records_in_window": 78934,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 350.1,
+          "estimated_lost": 1049
+        },
+        "C": {
+          "n_records_in_window": 39529,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046087,
+            1789046090
+          ],
+          "local_rate_msg_per_sec": 325.9,
+          "estimated_lost": 976
+        }
+      }
+    },
+    {
+      "epoch": 1789046175,
+      "time_utc": "2026-09-10T13:16:15+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 55794,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046122,
+            1789046125
+          ],
+          "local_rate_msg_per_sec": 457.0,
+          "estimated_lost": 1370
+        },
+        "B": {
+          "n_records_in_window": 79920,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046122,
+            1789046125
+          ],
+          "local_rate_msg_per_sec": 622.1,
+          "estimated_lost": 1865
+        },
+        "C": {
+          "n_records_in_window": 38618,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046156,
+            1789046159
+          ],
+          "local_rate_msg_per_sec": 348.3,
+          "estimated_lost": 1043
+        }
+      }
+    },
+    {
+      "epoch": 1789046186,
+      "time_utc": "2026-09-10T13:16:26+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 50801,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046225,
+            1789046228
+          ],
+          "local_rate_msg_per_sec": 504.0,
+          "estimated_lost": 1511
+        },
+        "B": {
+          "n_records_in_window": 80377,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046130,
+            1789046133
+          ],
+          "local_rate_msg_per_sec": 651.7,
+          "estimated_lost": 1954
+        },
+        "C": {
+          "n_records_in_window": 29975,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046156,
+            1789046159
+          ],
+          "local_rate_msg_per_sec": 327.1,
+          "estimated_lost": 980
+        }
+      }
+    },
+    {
+      "epoch": 1789046256,
+      "time_utc": "2026-09-10T13:17:36+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 23755,
+          "max_gap_sec": 7,
+          "gap_between": [
+            1789046256,
+            1789046263
+          ],
+          "local_rate_msg_per_sec": 388.0,
+          "estimated_lost": 2715
+        },
+        "B": {
+          "n_records_in_window": 57826,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046225,
+            1789046228
+          ],
+          "local_rate_msg_per_sec": 656.4,
+          "estimated_lost": 1968
+        },
+        "C": {
+          "n_records_in_window": 43265,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046259,
+            1789046263
+          ],
+          "local_rate_msg_per_sec": 166.3,
+          "estimated_lost": 664
+        }
+      }
+    },
+    {
+      "epoch": 1789046264,
+      "time_utc": "2026-09-10T13:17:44+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 19363,
+          "max_gap_sec": 7,
+          "gap_between": [
+            1789046256,
+            1789046263
+          ],
+          "local_rate_msg_per_sec": 360.2,
+          "estimated_lost": 2520
+        },
+        "B": {
+          "n_records_in_window": 57072,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046225,
+            1789046228
+          ],
+          "local_rate_msg_per_sec": 596.3,
+          "estimated_lost": 1787
+        },
+        "C": {
+          "n_records_in_window": 42438,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046259,
+            1789046263
+          ],
+          "local_rate_msg_per_sec": 124.5,
+          "estimated_lost": 497
+        }
+      }
+    },
+    {
+      "epoch": 1789046277,
+      "time_utc": "2026-09-10T13:17:57+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 14625,
+          "max_gap_sec": 7,
+          "gap_between": [
+            1789046256,
+            1789046263
+          ],
+          "local_rate_msg_per_sec": 365.4,
+          "estimated_lost": 2557
+        },
+        "B": {
+          "n_records_in_window": 54139,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046225,
+            1789046228
+          ],
+          "local_rate_msg_per_sec": 490.5,
+          "estimated_lost": 1470
+        },
+        "C": {
+          "n_records_in_window": 42177,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046259,
+            1789046263
+          ],
+          "local_rate_msg_per_sec": 190.5,
+          "estimated_lost": 761
+        }
+      }
+    },
+    {
+      "epoch": 1789046343,
+      "time_utc": "2026-09-10T13:19:03+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 31084,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046343,
+            1789046347
+          ],
+          "local_rate_msg_per_sec": 117.8,
+          "estimated_lost": 470
+        },
+        "B": {
+          "n_records_in_window": 57207,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046294,
+            1789046297
+          ],
+          "local_rate_msg_per_sec": 451.2,
+          "estimated_lost": 1352
+        },
+        "C": {
+          "n_records_in_window": 77348,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046294,
+            1789046297
+          ],
+          "local_rate_msg_per_sec": 353.0,
+          "estimated_lost": 1058
+        }
+      }
+    },
+    {
+      "epoch": 1789046348,
+      "time_utc": "2026-09-10T13:19:08+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 31936,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046343,
+            1789046347
+          ],
+          "local_rate_msg_per_sec": 114.9,
+          "estimated_lost": 458
+        },
+        "B": {
+          "n_records_in_window": 52235,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046294,
+            1789046297
+          ],
+          "local_rate_msg_per_sec": 443.2,
+          "estimated_lost": 1328
+        },
+        "C": {
+          "n_records_in_window": 77634,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046294,
+            1789046297
+          ],
+          "local_rate_msg_per_sec": 352.4,
+          "estimated_lost": 1056
+        }
+      }
+    },
+    {
+      "epoch": 1789046358,
+      "time_utc": "2026-09-10T13:19:18+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 34289,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046343,
+            1789046347
+          ],
+          "local_rate_msg_per_sec": 167.3,
+          "estimated_lost": 668
+        },
+        "B": {
+          "n_records_in_window": 45660,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046329,
+            1789046332
+          ],
+          "local_rate_msg_per_sec": 432.5,
+          "estimated_lost": 1296
+        },
+        "C": {
+          "n_records_in_window": 81589,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046329,
+            1789046332
+          ],
+          "local_rate_msg_per_sec": 415.3,
+          "estimated_lost": 1244
+        }
+      }
+    },
+    {
+      "epoch": 1789046427,
+      "time_utc": "2026-09-10T13:20:27+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 44684,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046398,
+            1789046401
+          ],
+          "local_rate_msg_per_sec": 308.6,
+          "estimated_lost": 924
+        },
+        "B": {
+          "n_records_in_window": 59128,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046398,
+            1789046401
+          ],
+          "local_rate_msg_per_sec": 313.9,
+          "estimated_lost": 940
+        },
+        "C": {
+          "n_records_in_window": 121919,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046398,
+            1789046401
+          ],
+          "local_rate_msg_per_sec": 710.4,
+          "estimated_lost": 2130
+        }
+      }
+    },
+    {
+      "epoch": 1789046443,
+      "time_utc": "2026-09-10T13:20:43+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 39400,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046398,
+            1789046401
+          ],
+          "local_rate_msg_per_sec": 371.7,
+          "estimated_lost": 1114
+        },
+        "B": {
+          "n_records_in_window": 59309,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046398,
+            1789046401
+          ],
+          "local_rate_msg_per_sec": 231.3,
+          "estimated_lost": 692
+        },
+        "C": {
+          "n_records_in_window": 120522,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046398,
+            1789046401
+          ],
+          "local_rate_msg_per_sec": 799.9,
+          "estimated_lost": 2398
+        }
+      }
+    },
+    {
+      "epoch": 1789046506,
+      "time_utc": "2026-09-10T13:21:46+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 36579,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046502,
+            1789046505
+          ],
+          "local_rate_msg_per_sec": 323.1,
+          "estimated_lost": 968
+        },
+        "B": {
+          "n_records_in_window": 82771,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046502,
+            1789046505
+          ],
+          "local_rate_msg_per_sec": 492.8,
+          "estimated_lost": 1477
+        },
+        "C": {
+          "n_records_in_window": 121839,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046502,
+            1789046505
+          ],
+          "local_rate_msg_per_sec": 993.3,
+          "estimated_lost": 2978
+        }
+      }
+    },
+    {
+      "epoch": 1789046526,
+      "time_utc": "2026-09-10T13:22:06+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 29478,
+          "max_gap_sec": 10,
+          "gap_between": [
+            1789046557,
+            1789046567
+          ],
+          "local_rate_msg_per_sec": 391.6,
+          "estimated_lost": 3915
+        },
+        "B": {
+          "n_records_in_window": 68981,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046502,
+            1789046505
+          ],
+          "local_rate_msg_per_sec": 479.6,
+          "estimated_lost": 1437
+        },
+        "C": {
+          "n_records_in_window": 109594,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046578,
+            1789046584
+          ],
+          "local_rate_msg_per_sec": 1014.9,
+          "estimated_lost": 6088
+        }
+      }
+    },
+    {
+      "epoch": 1789046587,
+      "time_utc": "2026-09-10T13:23:07+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 64009,
+          "max_gap_sec": 10,
+          "gap_between": [
+            1789046557,
+            1789046567
+          ],
+          "local_rate_msg_per_sec": 245.6,
+          "estimated_lost": 2455
+        },
+        "B": {
+          "n_records_in_window": 71590,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046571,
+            1789046574
+          ],
+          "local_rate_msg_per_sec": 571.5,
+          "estimated_lost": 1713
+        },
+        "C": {
+          "n_records_in_window": 53981,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046578,
+            1789046584
+          ],
+          "local_rate_msg_per_sec": 915.7,
+          "estimated_lost": 5493
+        }
+      }
+    },
+    {
+      "epoch": 1789046602,
+      "time_utc": "2026-09-10T13:23:22+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 75148,
+          "max_gap_sec": 10,
+          "gap_between": [
+            1789046557,
+            1789046567
+          ],
+          "local_rate_msg_per_sec": 318.4,
+          "estimated_lost": 3182
+        },
+        "B": {
+          "n_records_in_window": 61871,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046571,
+            1789046574
+          ],
+          "local_rate_msg_per_sec": 505.4,
+          "estimated_lost": 1515
+        },
+        "C": {
+          "n_records_in_window": 42346,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046578,
+            1789046584
+          ],
+          "local_rate_msg_per_sec": 823.3,
+          "estimated_lost": 4938
+        }
+      }
+    },
+    {
+      "epoch": 1789046633,
+      "time_utc": "2026-09-10T13:23:53+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 103068,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046581,
+            1789046584
+          ],
+          "local_rate_msg_per_sec": 506.4,
+          "estimated_lost": 1518
+        },
+        "B": {
+          "n_records_in_window": 46609,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046640,
+            1789046643
+          ],
+          "local_rate_msg_per_sec": 561.6,
+          "estimated_lost": 1683
+        },
+        "C": {
+          "n_records_in_window": 12578,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046578,
+            1789046584
+          ],
+          "local_rate_msg_per_sec": 573.9,
+          "estimated_lost": 3442
+        }
+      }
+    },
+    {
+      "epoch": 1789046686,
+      "time_utc": "2026-09-10T13:24:46+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 119362,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046709,
+            1789046712
+          ],
+          "local_rate_msg_per_sec": 804.4,
+          "estimated_lost": 2412
+        },
+        "B": {
+          "n_records_in_window": 18531,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789046737,
+            1789046741
+          ],
+          "local_rate_msg_per_sec": 409.7,
+          "estimated_lost": 1637
+        },
+        "C": {
+          "n_records_in_window": 17075,
+          "max_gap_sec": 5,
+          "gap_between": [
+            1789046633,
+            1789046638
+          ],
+          "local_rate_msg_per_sec": 151.6,
+          "estimated_lost": 756
+        }
+      }
+    },
+    {
+      "epoch": 1789046720,
+      "time_utc": "2026-09-10T13:25:20+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 119799,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046709,
+            1789046712
+          ],
+          "local_rate_msg_per_sec": 989.1,
+          "estimated_lost": 2966
+        },
+        "B": {
+          "n_records_in_window": 19317,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046743,
+            1789046749
+          ],
+          "local_rate_msg_per_sec": 321.1,
+          "estimated_lost": 1925
+        },
+        "C": {
+          "n_records_in_window": 18337,
+          "max_gap_sec": 5,
+          "gap_between": [
+            1789046673,
+            1789046678
+          ],
+          "local_rate_msg_per_sec": 44.1,
+          "estimated_lost": 219
+        }
+      }
+    },
+    {
+      "epoch": 1789046762,
+      "time_utc": "2026-09-10T13:26:02+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 118545,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046709,
+            1789046712
+          ],
+          "local_rate_msg_per_sec": 1009.8,
+          "estimated_lost": 3028
+        },
+        "B": {
+          "n_records_in_window": 54676,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046743,
+            1789046749
+          ],
+          "local_rate_msg_per_sec": 77.9,
+          "estimated_lost": 466
+        },
+        "C": {
+          "n_records_in_window": 28520,
+          "max_gap_sec": 10,
+          "gap_between": [
+            1789046778,
+            1789046788
+          ],
+          "local_rate_msg_per_sec": 163.9,
+          "estimated_lost": 1637
+        }
+      }
+    },
+    {
+      "epoch": 1789046796,
+      "time_utc": "2026-09-10T13:26:36+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 118782,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046778,
+            1789046781
+          ],
+          "local_rate_msg_per_sec": 1004.3,
+          "estimated_lost": 3011
+        },
+        "B": {
+          "n_records_in_window": 65033,
+          "max_gap_sec": 7,
+          "gap_between": [
+            1789046844,
+            1789046851
+          ],
+          "local_rate_msg_per_sec": 278.2,
+          "estimated_lost": 1946
+        },
+        "C": {
+          "n_records_in_window": 32081,
+          "max_gap_sec": 10,
+          "gap_between": [
+            1789046778,
+            1789046788
+          ],
+          "local_rate_msg_per_sec": 150.3,
+          "estimated_lost": 1502
+        }
+      }
+    },
+    {
+      "epoch": 1789046845,
+      "time_utc": "2026-09-10T13:27:25+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 121436,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046847,
+            1789046850
+          ],
+          "local_rate_msg_per_sec": 1016.6,
+          "estimated_lost": 3048
+        },
+        "B": {
+          "n_records_in_window": 97132,
+          "max_gap_sec": 7,
+          "gap_between": [
+            1789046844,
+            1789046851
+          ],
+          "local_rate_msg_per_sec": 510.2,
+          "estimated_lost": 3570
+        },
+        "C": {
+          "n_records_in_window": 51078,
+          "max_gap_sec": 10,
+          "gap_between": [
+            1789046794,
+            1789046804
+          ],
+          "local_rate_msg_per_sec": 306.5,
+          "estimated_lost": 3064
+        }
+      }
+    },
+    {
+      "epoch": 1789046886,
+      "time_utc": "2026-09-10T13:28:06+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 87870,
+          "max_gap_sec": 12,
+          "gap_between": [
+            1789046911,
+            1789046923
+          ],
+          "local_rate_msg_per_sec": 995.1,
+          "estimated_lost": 11940
+        },
+        "B": {
+          "n_records_in_window": 79231,
+          "max_gap_sec": 10,
+          "gap_between": [
+            1789046913,
+            1789046923
+          ],
+          "local_rate_msg_per_sec": 786.4,
+          "estimated_lost": 7862
+        },
+        "C": {
+          "n_records_in_window": 56425,
+          "max_gap_sec": 14,
+          "gap_between": [
+            1789046909,
+            1789046923
+          ],
+          "local_rate_msg_per_sec": 271.9,
+          "estimated_lost": 3804
+        }
+      }
+    },
+    {
+      "epoch": 1789046992,
+      "time_utc": "2026-09-10T13:29:52+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 9858,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046961,
+            1789046967
+          ],
+          "local_rate_msg_per_sec": 359.9,
+          "estimated_lost": 2158
+        },
+        "B": {
+          "n_records_in_window": 34829,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046984,
+            1789046987
+          ],
+          "local_rate_msg_per_sec": 529.4,
+          "estimated_lost": 1587
+        },
+        "C": {
+          "n_records_in_window": 61287,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046984,
+            1789046987
+          ],
+          "local_rate_msg_per_sec": 428.1,
+          "estimated_lost": 1283
+        }
+      }
+    },
+    {
+      "epoch": 1789046994,
+      "time_utc": "2026-09-10T13:29:54+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 9553,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046961,
+            1789046967
+          ],
+          "local_rate_msg_per_sec": 346.5,
+          "estimated_lost": 2077
+        },
+        "B": {
+          "n_records_in_window": 32938,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046984,
+            1789046987
+          ],
+          "local_rate_msg_per_sec": 511.6,
+          "estimated_lost": 1533
+        },
+        "C": {
+          "n_records_in_window": 60392,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046984,
+            1789046987
+          ],
+          "local_rate_msg_per_sec": 430.7,
+          "estimated_lost": 1291
+        }
+      }
+    },
+    {
+      "epoch": 1789047002,
+      "time_utc": "2026-09-10T13:30:02+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 9500,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789046961,
+            1789046967
+          ],
+          "local_rate_msg_per_sec": 273.4,
+          "estimated_lost": 1639
+        },
+        "B": {
+          "n_records_in_window": 30334,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046984,
+            1789046987
+          ],
+          "local_rate_msg_per_sec": 475.2,
+          "estimated_lost": 1424
+        },
+        "C": {
+          "n_records_in_window": 57769,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789046984,
+            1789046987
+          ],
+          "local_rate_msg_per_sec": 430.7,
+          "estimated_lost": 1291
+        }
+      }
+    },
+    {
+      "epoch": 1789047070,
+      "time_utc": "2026-09-10T13:31:10+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 39047,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789047053,
+            1789047056
+          ],
+          "local_rate_msg_per_sec": 85.2,
+          "estimated_lost": 254
+        },
+        "B": {
+          "n_records_in_window": 16117,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789047069,
+            1789047075
+          ],
+          "local_rate_msg_per_sec": 235.7,
+          "estimated_lost": 1413
+        },
+        "C": {
+          "n_records_in_window": 47214,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789047053,
+            1789047056
+          ],
+          "local_rate_msg_per_sec": 466.3,
+          "estimated_lost": 1397
+        }
+      }
+    },
+    {
+      "epoch": 1789047083,
+      "time_utc": "2026-09-10T13:31:23+00:00",
+      "zones": {
+        "A": {
+          "n_records_in_window": 40878,
+          "max_gap_sec": 3,
+          "gap_between": [
+            1789047053,
+            1789047056
+          ],
+          "local_rate_msg_per_sec": 180.6,
+          "estimated_lost": 540
+        },
+        "B": {
+          "n_records_in_window": 11892,
+          "max_gap_sec": 6,
+          "gap_between": [
+            1789047069,
+            1789047075
+          ],
+          "local_rate_msg_per_sec": 225.5,
+          "estimated_lost": 1351
+        },
+        "C": {
+          "n_records_in_window": 36595,
+          "max_gap_sec": 4,
+          "gap_between": [
+            1789047133,
+            1789047137
+          ],
+          "local_rate_msg_per_sec": 451.2,
+          "estimated_lost": 1803
+        }
+      }
+    }
+  ],
+  "restart_events": [
+    {
+      "stop_epoch": 1789046909,
+      "start_epoch": 1789046909,
+      "downtime_sec": 0,
+      "zones": {
+        "A": {
+          "local_rate_msg_per_sec": 1014.0,
+          "estimated_lost": 0
+        },
+        "B": {
+          "local_rate_msg_per_sec": 808.1,
+          "estimated_lost": 0
+        },
+        "C": {
+          "local_rate_msg_per_sec": 454.9,
+          "estimated_lost": 0
+        }
+      }
+    }
+  ]
+}
