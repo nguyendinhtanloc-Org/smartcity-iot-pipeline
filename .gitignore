@@ -10,3 +10,4 @@ logs/
 data/raw/
 *.jsonl
 .DS_Store
+*.log
