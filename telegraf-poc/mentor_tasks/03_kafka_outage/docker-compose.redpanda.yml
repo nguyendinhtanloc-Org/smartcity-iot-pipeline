@@ -1,0 +1,24 @@
+# Dùng kèm docker-compose.yml gốc:
+#   docker compose -f docker-compose.yml -f 03_kafka_outage/docker-compose.redpanda.yml up -d
+#
+# Redpanda 1-node, không cần Zookeeper (khác Kafka thường), phù hợp test nhanh trên máy dev.
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: redpanda-test
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+
+  telegraf:
+    depends_on:
+      - redpanda
