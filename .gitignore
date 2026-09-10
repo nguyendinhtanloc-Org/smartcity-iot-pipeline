@@ -9,5 +9,6 @@ build/
 logs/
 data/raw/
 *.jsonl
+*.jsonl.bak_*
 .DS_Store
 *.log
