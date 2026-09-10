@@ -1,0 +1,14 @@
+{
+  "total_lines": 3780414,
+  "json_errors": 0,
+  "unique_valid": 2990,
+  "unique_invalid": 0,
+  "duplicate_cross_zone": 2487869,
+  "duplicate_same_zone": 1289555,
+  "per_khu_cn_unique": {
+    "A": 2726,
+    "B": 255,
+    "C": 9
+  },
+  "top_validate_errors": {}
+}
